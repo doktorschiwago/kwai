@@ -1,0 +1,23 @@
+myfunction <- function(arg1,arg2){
+	qq=arg1+1
+	qq2=arg1+1
+	if (qq2>arg2) {
+		return(qq)
+	} else {
+		return(-11)
+	}
+}
+
+myfunction2 <-function(a) {
+	return(myfunction(a+1,a-1))
+}
+
+
+library(kwai)
+
+#debug(inferType2)
+llvmFunc=byte2llvm(myfunction2)
+print(myfunction2)
+print(myfunction2(-11))
+print(llvmFunc(-11))
+

@@ -4,9 +4,9 @@
 #
 #
 
-library(Rllvm)
-library(compiler)
-library(ref)
+#library(Rllvm)
+#library(compiler)
+#library(ref)
 
 #source("~/dev/scratch/tst3/Rllvm/R/mkFun.R")
 
