@@ -341,7 +341,7 @@ inferFunctionType = function(context, funcSignature=NULL) {
 		arg$name=argList[i]
 		
 		if (is.null(funcSignature)) {
-			arg$returnType=list(name=tpNumeric,vector=FALSE)
+			arg$returnType=list(name=tpAny,vector=FALSE)
 		} else {
 			if (length(funcSignature$named) >0) {
 				if (is.null(funcSignature$named[[argList[i]]])) {
@@ -494,7 +494,7 @@ initLlvmContext = function(modName, absPath) {
 	#debugDescriptor=newDebugDescriptor(debugBuilder, debugFile)
 
 	debugDouble=newDebugBasicType(debugBuilder, "double", 64, 64, 4 ) #4 = dwarf::DW_ATE_float
-	debugSEXP=newDebugBasicType(debugBuilder, "SEXP", 64, 64, 1 ) #1 = DW_ATE_address
+	debugSEXP=newDebugPointerType(debugBuilder, debugDouble, "SEXP") #1 = DW_ATE_address
 	#debugDouble="q"
 	rType2LlvmDebug <- function(rType) {
 		switch(rType$name,
@@ -653,8 +653,7 @@ compile2llvm = function(context, llvmContext) {
 	fun = Function(context$funcName, rType2Llvm(returnType), llvmSignature, mod)
 
 	debugSignature=c(rType2LlvmDebug(returnType),debugSignature)
-	debugFile = newDebugFile(debugBuilder, debugCompUnit)
-	debugFunSignature=newDebugFunctionType(debugBuilder, debugSignature, debugFile)
+	debugFunSignature=newDebugFunctionType(debugBuilder, debugSignature, debugCompUnit)
 
 	debugFun=newDebugFunction(debugBuilder, debugCompUnit, fun, debugFunSignature, attr(body(func)[[2]],"srcref")[1])
 		
@@ -760,7 +759,7 @@ compile2llvm = function(context, llvmContext) {
 						value=createBitCast(ir, x,pointerType(Int32Type))
 						data=createGEP(ir,value,c(createConstant(ir,10L)))
 						data2=createLoad(ir,data)
-						createTrunc(ir,data2,Int1Type)
+						createTrunc(ir,data2,getIntegerType(1))
 					},
 					logical={x},
 					{stop("in the name of love")}
@@ -832,6 +831,43 @@ compile2llvm = function(context, llvmContext) {
 	return(fun)
 }
 
+makeRFunction2 =
+  #
+  # Create an R function that wraps an LLVM function Call (via .Call) in a R function
+  #
+  #
+function(func, .ee = ExecutionEngine(as(func, "Module")))
+{
+  params = getParameters(func)
+  i = is.na(params@names) | params@names == ""
+  if(any(i))
+    params@names[i] = sprintf("var%d", which(i))
+
+  parms = alist(a= )
+  parms = structure(replicate(length(params@names), parms), names = params@names)
+  
+  f = function() {}
+  formals(f) = parms
+  formals(f)[["..."]] = parms[[1]]
+
+	ptr=getNativePointerToFunction(func,.ee)
+  
+  e = quote(.args <- a)
+  al = quote(.Call())
+	al[[2]] = ptr
+  for(i in 1:length(params@names))
+     al[[2 + i]] = as.name(params@names[i])
+  e[[3]] = al
+
+	
+
+  
+  body(f)[[2]] = e 
+  
+  #body(f)[[3]] =  substitute(.Call(ptr, .args = .args, .ee = .ee, ...), list(func = func, .ee = .ee))
+  f
+}
+
 finishCompilation <- function(fun, llvmContext, llvmSignature) {	
 	
 	mod=llvmContext$mod
@@ -846,34 +882,30 @@ finishCompilation <- function(fun, llvmContext, llvmSignature) {
 		print("ohno")
 	}
 
-
-	# setting primitives for callin into R
-	setOpFunWrapper=makeWrapperFunction(setOpFun,setOpFunArgTypes,mod)
-	funWrapper=makeWrapperFunction(fun,llvmSignature,mod)
 	
 	finalizeDIBuilder(debugBuilder)
-	engine=ExecutionEngine(mod)
+	engine=ExecutionEngine(mod, useMCJIT=TRUE)
 	finalizeEngine(engine)
 	
 	
 
-	setOpFunR=makeRFunction2(setOpFun,setOpFunWrapper,.ee=engine)
-	res<-makeRFunction2(fun,funWrapper,.ee=engine)
+	setOpFunR=makeRFunction2(setOpFun,.ee=engine)
+	res<-makeRFunction2(fun,.ee=engine)
 	#browser()
 	setOpFunR( add=.Primitive("+"), mul=.Primitive("*"), gt=.Primitive(">"))
 	print("finish compilation")
 
-	browser()
+	#browser()
 
 	return(res)
 }
 
 
-byte2llvm = function(func, funcSignature=NULL) {
-	browser()
+byte2llvm = function(func) {
+	#browser()
 	funcName=deparse(substitute(func))
 	ctxt=initCompileContext(func,funcName)
-	ctxt=inferFunctionType(ctxt,funcSignature)
+	ctxt=inferFunctionType(ctxt)
 
 	llvmContext=initLlvmContext(funcName, ctxt$absPath)
 	llvmFun=compile2llvm(ctxt,llvmContext)
