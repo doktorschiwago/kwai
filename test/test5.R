@@ -9,7 +9,7 @@ posList[[1]]=sexpType
 posList[[2]]=sexpType
 funcSignature=list(named=list(),pos=posList)
 
-llvmFunc=byte2llvm(myfunction,funcSignature)
+llvmFunc=byte2llvm(myfunction)
 
 print(myfunction)
 print(myfunction(-11,0))

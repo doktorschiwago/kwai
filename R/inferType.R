@@ -102,7 +102,9 @@ inferType2 <- function(op,insNo,insList,insNo2,args,vars,constants,typeInformati
 			var=constants[[1+args[1]]]
 			newType=list(name=tpAny, vector=(length(var)>1))
 			if (typeof(var)=="double") {
-				newType$name=tpNumeric
+				if (is.null(currentNeededType) || currentNeededType$name==tpNumeric) {
+					newType$name=tpNumeric
+				}
 			}
 				
 		},

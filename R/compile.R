@@ -412,7 +412,8 @@ inferFunctionType = function(context, funcSignature=NULL) {
 							stop("initStack length differs between deps!")
 						} else {
 							for (k in (1:initStack$stackPos)) {
-								tpInfoInit[[k]]=higherType(tpInfoInit[[k]],blockList[[j]]$typeInformation[[initStack$stackOnExit[[k]]]])
+								tpInfoInit[[k]]=higherType(tpInfoInit[[k]],
+									blockList[[j]]$typeInformation[[initStackList[[j]]$stackOnExit[[k]]]])
 							}
 						}
 					}
@@ -430,6 +431,30 @@ inferFunctionType = function(context, funcSignature=NULL) {
 			initStackList[[i]]=visitStackMachine(source[blockList[[i]]$start:blockList[[i]]$end],myInferType,initStack)
 			#browser()
 
+			#if there are information concerning neededTypes in the supplied initStack
+			#these must be propagated to the initStack providers
+
+			if (initStack$stackPos>0) {
+				#looping over the supplied init stack
+				for (k in (1:initStack$stackPos)) {
+					
+					#browser()
+					#propagatin needed type to all dependencies
+
+					for (j in blockList[[i]]$deps) {
+						if (is.null(initStackList[j][[1]]	)) {
+							stop("initStackList[j] should no be null here!")
+						}
+						#stop("continue here")
+					
+						currentInitStack=initStackList[[j]]
+						blockList[[j]]$typeInformation[[initStackList[[j]]$stackOnExit[[k]]]]$neededType=
+								higherType(tpInfoInit[[k]],blockList[[j]]$typeInformation[[initStackList[[j]]$stackOnExit[[k]]]]$neededType)
+
+					}
+				}
+			}
+
 			if (initStackList[[i]]$stackPos == 0) {
 				initStackList[[i]]=NULL
 				blockList[[i]]$typeExitStack=NULL
@@ -438,9 +463,10 @@ inferFunctionType = function(context, funcSignature=NULL) {
 			}
 
 			blockList[[i]]$typeInformation=typeInformation
+
 			
 
-			printBlock(blockList[[i]], i, source[blockList[[i]]$start:blockList[[i]]$end])
+			#printBlock(blockList[[i]], i, source[blockList[[i]]$start:blockList[[i]]$end])
 
 		
 			if (as.character(source[blockList[[i]]$end]) == "RETURN.OP" || i==length(blockList)) {
@@ -456,7 +482,7 @@ inferFunctionType = function(context, funcSignature=NULL) {
 			}
 
 		}
-		print(vars)
+		#print(vars)
 		#browser()
 		
 		if (returnTypeChanged) {
@@ -472,6 +498,11 @@ inferFunctionType = function(context, funcSignature=NULL) {
 			}
 		}			
 	}	
+
+	for (i in 1:length(blockList)) {
+		printBlock(blockList[[i]], i, source[blockList[[i]]$start:blockList[[i]]$end])
+
+	}
 
 	res=context
 	res$args=args
@@ -802,7 +833,7 @@ compile2llvm = function(context, llvmContext) {
 					stop("block depends on higher block!")
 				}
 				if (!is.null(initStackList[j][[1]]	)) {
-					browser()
+					#browser()
 					if (initStack$stackPos == 0) {
 						initStack=initStackList[[j]]
 						for (k in (1:initStack$stackPos)) {

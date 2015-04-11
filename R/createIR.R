@@ -18,7 +18,11 @@ createIR <- function(op,insNo,insList,insNo2,args,ir,params,constants, blockList
 			}
 		},
 		"LDCONST.OP" = {
-			makeConstant(ir,as.double(constants[[1+args[1]]]))
+			#browser()
+			typeInformation=blockList[[currentBlock]]$typeInformation[[insNo]]
+			typeOp=blockOps[[typeInformation$name]]
+
+			typeOp$coerce(makeConstant(ir,as.double(constants[[1+args[1]]])),getType(tpNumeric,(length(var)>1)))
 		},
 		"SUB.OP"	= ,
 		"MUL.OP" 	= ,
@@ -77,7 +81,7 @@ createIR <- function(op,insNo,insList,insNo2,args,ir,params,constants, blockList
 		},
 		"BRIFNOT.OP" = {
 			#addin debug information
-			browser()
+			#browser()
 			debugSetLocation(ir, debugFunction, attr(constants[[1+args[[1]]]],"srcref")[1], attr(constants[[1+args[[1]]]],"srcref")[5])
 
 			typeOp=blockOps[["logical"]]
