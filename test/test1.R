@@ -6,10 +6,11 @@ source("../R/compile.R")
 source("../R/typelib.R")
 source("../R/inferType.R")
 source("../R/createIR.R")
+source("../R/typelib.R")
 source("../R/llvm_helper.R")
 
 myfunction <- function(arg1,arg2){
-	qq=2*arg1+arg2
+	qq=1+2
 	return(qq)
 }
 

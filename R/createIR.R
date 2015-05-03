@@ -7,7 +7,7 @@ createIR <- function(op,insNo,insList,insNo2,args,ir,params,constants, blockList
 			#browser()
 			varName=as.character(constants[[1+args[1]]])
 			var=params[[varName]]
-			varType=vars[[varName]]$name
+			varType=tpGetName(vars[[varName]])
 			if (class(var)[1]=="AllocaInst") {
 				
 				blockOps[[varType]]$readVar(ir,createLoad(ir,var))
@@ -20,9 +20,9 @@ createIR <- function(op,insNo,insList,insNo2,args,ir,params,constants, blockList
 		"LDCONST.OP" = {
 			#browser()
 			typeInformation=blockList[[currentBlock]]$typeInformation[[insNo]]
-			typeOp=blockOps[[typeInformation$name]]
+			typeOp=blockOps[[tpGetName(typeInformation)]]
 
-			typeOp$coerce(makeConstant(ir,as.double(constants[[1+args[1]]])),getType(tpNumeric,(length(var)>1)))
+			typeOp$coerce(makeConstant(ir,as.double(constants[[1+args[1]]])),getType(tpNumeric,vectorLength=length(var)))
 		},
 		"SUB.OP"	= ,
 		"MUL.OP" 	= ,
@@ -32,11 +32,11 @@ createIR <- function(op,insNo,insList,insNo2,args,ir,params,constants, blockList
 			debugSetLocation(ir, debugFunction, attr(constants[[1+args[[1]]]],"srcref")[1], attr(constants[[1+args[[1]]]],"srcref")[5])
 
 			typeInformation=blockList[[currentBlock]]$typeInformation[[insNo]]
-			typeOp=blockOps[[typeInformation$name]]
-			typeOpA=blockOps[[typeInformation$args$A$name]]
-			typeOpB=blockOps[[typeInformation$args$B$name]]
-			argA=typeOp$coerce(insList[[insNo2-1]],typeInformation$args$A)
-			argB=typeOp$coerce(insList[[insNo2]],typeInformation$args$B)
+			typeOp=blockOps[[tpGetName(typeInformation)]]
+			typeOpA=blockOps[[tpGetName(tpGetArg(typeInformation, "A"))]]
+			typeOpB=blockOps[[tpGetName(tpGetArg(typeInformation, "B"))]]
+			argA=typeOp$coerce(insList[[insNo2-1]], tpGetArg(typeInformation, "A"))
+			argB=typeOp$coerce(insList[[insNo2]], tpGetArg(typeInformation, "B"))
 			switch(op,
 				"MUL.OP" = {
 					typeOp$mul(ir,argA,argB)
@@ -56,20 +56,25 @@ createIR <- function(op,insNo,insList,insNo2,args,ir,params,constants, blockList
 			)
 
 		},
+		"EQ.OP"		= ,
 		"GT.OP" 	=  {
 			#addin debug information
 			#browser()
 			debugSetLocation(ir, debugFunction, attr(constants[[1+args[[1]]]],"srcref")[1], attr(constants[[1+args[[1]]]],"srcref")[5])
 
 			typeInformation=blockList[[currentBlock]]$typeInformation[[insNo]]
-			if (typesMatch(typeInformation$args$A,typeInformation$args$B)) {
-				typeOp=blockOps[[typeInformation$args$A$name]]
+			if (typesMatch(tpGetArg(typeInformation, "A"), tpGetArg(typeInformation, "B"))) {
+				typeOp=blockOps[[tpGetName(tpGetArg(typeInformation, "A"))]]
 			} else {
-				typeOp=blockOps[[higherType(typeInformation$args$A,typeInformation$args$B)$name]]
+				typeOp=blockOps[[tpGetName(higherType(tpGetArg(typeInformation, "A"), tpGetArg(typeInformation, "B")))]]
 			}
-			argA=typeOp$coerce(insList[[insNo2-1]],typeInformation$args$A)
-			argB=typeOp$coerce(insList[[insNo2]],typeInformation$args$B)
+			argA=typeOp$coerce(insList[[insNo2-1]],tpGetArg(typeInformation, "A"))
+			argB=typeOp$coerce(insList[[insNo2]],tpGetArg(typeInformation, "B"))
 			switch(op,
+				"EQ.OP" = {
+					
+					typeOp$eq(ir,argA,argB)
+				},				
 				"GT.OP" = {
 					
 					typeOp$gt(ir,argA,argB)
@@ -84,9 +89,23 @@ createIR <- function(op,insNo,insList,insNo2,args,ir,params,constants, blockList
 			#browser()
 			debugSetLocation(ir, debugFunction, attr(constants[[1+args[[1]]]],"srcref")[1], attr(constants[[1+args[[1]]]],"srcref")[5])
 
-			typeOp=blockOps[["logical"]]
 			typeInformation=blockList[[currentBlock]]$typeInformation[[insNo]]
-			cond=typeOp$coerce(insList[[insNo2]],typeInformation$args$A)
+			typeInformationArg=tpGetArg(typeInformation, "A")
+			typeOpLogical=blockOps[["logical"]]
+			typeOp=blockOps[[tpGetName(typeInformationArg)]]
+			
+			
+			if (tpGetVectorLength(typeInformationArg) != 1) {
+				reduced=typeOp$subset2(
+					ir,
+					insList[[insNo2]],
+					typeOp$coerce(makeConstant(ir,1.0),getType(name=tpNumeric,vectorLength=1))
+				)
+				typeInformationArg=tpSetVectorLength(typeInformationArg,1)
+			} else {
+				reduced=insList[[insNo2]]
+			}
+			cond=typeOpLogical$coerce(reduced, typeInformationArg)
 			createCondBranch(ir, cond,blockList[[currentBlock+1]]$block,blockList[[args[2]]]$block)
 
 
@@ -98,8 +117,8 @@ createIR <- function(op,insNo,insList,insNo2,args,ir,params,constants, blockList
 			
 			
 			typeInformation=blockList[[currentBlock]]$typeInformation[[insNo]]
-			typeOp=blockOps[[typeInformation$name]]
-			retVal=typeOp$coerce(insList[[insNo2]],typeInformation$args$A)
+			typeOp=blockOps[[tpGetName(typeInformation)]]
+			retVal=typeOp$coerce(insList[[insNo2]], tpGetArg(typeInformation, "A"))
 			
 			if (doReturn) {
 				blockOps$any$cleanup(ir)
@@ -122,7 +141,7 @@ createIR <- function(op,insNo,insList,insNo2,args,ir,params,constants, blockList
 
 			promBlockList=list()
 			promBlockList[[1]]=list()
-			promBlockList[[1]]$typeInformation=typeInformation$promiseList
+			promBlockList[[1]]$typeInformation=tpGetPromiseList(typeInformation)
 
 
 			myCreateIR<-function(op,insNo,insList,insNo2,args2) {
@@ -135,23 +154,22 @@ createIR <- function(op,insNo,insList,insNo2,args,ir,params,constants, blockList
 			res$stackOnExit[[res$stackPos]]
 		},
 		"CALL.OP" = {
-			browser()
+			#browser()
 			callSymbol=constants[[1+args[[1]]]]
 			argCount=length(callSymbol)-1
 			
 			typeInformation=blockList[[currentBlock]]$typeInformation[[insNo]]
-			functionType=typeInformation$funcType
 
-			if (functionType$funType == "function") {
+			if (tpGetFunClass(typeInformation) == "function") {
 				
-				llvmFun=compile2llvm(typeInformation$funcContext,llvmContext)
+				llvmFun=compile2llvm(tpGetFuncContext(typeInformation),llvmContext)
 
-				if (argCount != length(typeInformation$funcContext$argList)) {
+				if (argCount != length(tpGetFuncContext(typeInformation)$argList)) {
 					stop("error: call and func definiton should match!")
 				}
 
-				namedArguments=typeInformation$argListNamedPos
-				args=typeInformation$funcContext$args
+				namedArguments=tpGetArgListNamedPos(typeInformation)
+				args=tpGetFuncContext(typeInformation)$args
 				
 				callArgs=list()
 	

@@ -1,11 +1,14 @@
 
-
 library(kwai)
+source("../R/compile.R")
+source("../R/inferType.R")
+source("../R/createIR.R")
+source("../R/llvm_helper.R")
 
 myfunction <- function(arg1,arg2){
 	qq=arg1+1
 	qq2=arg1+1
-	if (qq2>arg2) {
+	if (qq2==arg2) {
 		return(qq)
 	} else {
 		return(-11)

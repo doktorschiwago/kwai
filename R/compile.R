@@ -210,7 +210,7 @@ discoverBlocks <-function(source) {
 printBlockSource <- function(op,insNo,insList,insNo2,args,types) {
 	cat(insNo, " ", op, " ")
 	cat("\tArguments: ", args, "\n")
-	cat("\t Type Name: ", types[[insNo]]$name, ", needed Type: ", types[[insNo]]$neededType$name, "\n\n")
+	cat("\t Type Name: ", tpGetName(types[[insNo]],TRUE), ", needed Type: ", tpGetName(tpGetNeededType(types[[insNo]], TRUE), TRUE), "\n\n")
 	return("xx")
 }
 
@@ -230,7 +230,7 @@ printBlock <- function(block, no, source) {
 
 	#creatin a fake init Stack
 	#browser()
-	initStack=list(stackPos=10, stackOnExit=rep(list(), 10))
+	initStack=list(stackPos=10, stackOnExit=rep(list(), 10), insStart=0)
 
 	visitStackMachine(source,printBlockSource2, initStack)
 	
@@ -320,7 +320,7 @@ initCompileContext <- function(func,funcName) {
 
 }
 
-inferFunctionType = function(context, funcSignature=NULL) {
+inferFunctionType = function(context, funcSignature=NULL, forcedReturnType=NULL) {
 
 	blockList=context$blockList
 	argList=context$argList
@@ -339,19 +339,21 @@ inferFunctionType = function(context, funcSignature=NULL) {
 	for (i in 1:length(argList)) {
 		arg=list()
 		arg$name=argList[i]
+
+		#browser()
 		
 		if (is.null(funcSignature)) {
-			arg$returnType=list(name=tpAny,vector=FALSE)
+			arg$returnType=getType(name=tpAny)
 		} else {
 			if (length(funcSignature$named) >0) {
 				if (is.null(funcSignature$named[[argList[i]]])) {
-					arg$returnType=list(name=tpMissing,vector=FALSE)
+					arg$returnType=getType(name=tpMissing,vector=FALSE)
 				} else {
 					arg$returnType=funcSignature$named[[argList[i]]]
 				}
 			} else {
 				if (is.null(funcSignature$pos[i][[1]])) {
-					arg$returnType=list(name=tpMissing,vector=FALSE)
+					arg$returnType=getType(name=tpMissing,vector=FALSE)
 				} else {
 					arg$returnType=funcSignature$pos[[i]]
 				}
@@ -365,14 +367,21 @@ inferFunctionType = function(context, funcSignature=NULL) {
 		#print(argList[i])
 		args[[arg$name]]=arg
 
-		if (arg$returnType$name != tpMissing) {
+		#browser()
+
+		if (tpGetName(arg$returnType) != tpMissing) {
 			llvmSignature[[arg$name]]=rType2Llvm(arg$returnType)
 		}
 
 		vars[[arg$name]]=arg$returnType
 	}
 
-	returnType=NULL
+	if (is.null(forcedReturnType)) {
+		returnType=NULL
+	} else {
+		returnType=forcedReturnType
+	}
+
 	cntLoops=0
 	returnTypeChanged=TRUE
 
@@ -395,36 +404,48 @@ inferFunctionType = function(context, funcSignature=NULL) {
 			changed2=as.ref(changed)
 
 			initStack=list(stackOnExit=list(),stackPos=0)
-			tpInfoInit=list()
+			tpInit=list()
 
 			#checkin wheethe an initial stack state must be supplied
 			if (! (length(blockList[[i]]$deps)==0)) {
 				#browser()
 				for (j in blockList[[i]]$deps) {
-					if (! is.null(initStackList[j][[1]]	)) {
+					#browser()
+					if (! is.na(initStackList[j]	)) {
+						# the initial stack is positioned at negative position of typeinformation array
 						if (initStack$stackPos == 0) {
 							initStack=initStackList[[j]]
+							initStack$insStart = initStack$stackPos
 							for (k in (1:initStack$stackPos)) {
-								tpInfoInit[[k]]=blockList[[j]]$typeInformation[[initStack$stackOnExit[[k]]]]
+								tpInit[[k]]=blockList[[j]]$typeInformation[[initStack$stackOnExit[[k]]]]
 								initStack$stackOnExit[[k]]=k
 							}
 						} else if  (initStack$stackPos != initStackList[[j]]$stackPos ){
 							stop("initStack length differs between deps!")
 						} else {
 							for (k in (1:initStack$stackPos)) {
-								tpInfoInit[[k]]=higherType(tpInfoInit[[k]],
+								tpInit[[k]]=higherType(tpInit[[k]],
 									blockList[[j]]$typeInformation[[initStackList[[j]]$stackOnExit[[k]]]])
 							}
 						}
 					}
 				}
 			}
+
+			if (initStack$stackPos == 0) {
+				initStack=NULL
+				typeInformation=blockList[[i]]$typeInformation
+			} else {
+				typeInformation=c(tpInit,blockList[[i]]$typeInformation)
+			}
 			#browser()
-			typeInformation=c(tpInfoInit,blockList[[i]]$typeInformation)
+			
 			typeInformation2=as.ref(typeInformation)
 			myInferType<-function(op,insNo,insList,insNo2,args2) {
 				inferType2(op,insNo,insList,insNo2,args2,vars2,constants,typeInformation2,changed2)
 			}
+
+
 
 
 			#browser()
@@ -433,8 +454,9 @@ inferFunctionType = function(context, funcSignature=NULL) {
 
 			#if there are information concerning neededTypes in the supplied initStack
 			#these must be propagated to the initStack providers
+			#this tests for the stack that was supplied to the invocation
 
-			if (initStack$stackPos>0) {
+			if (! is.null(initStack$stackPos)) {
 				#looping over the supplied init stack
 				for (k in (1:initStack$stackPos)) {
 					
@@ -448,21 +470,40 @@ inferFunctionType = function(context, funcSignature=NULL) {
 						#stop("continue here")
 					
 						currentInitStack=initStackList[[j]]
-						blockList[[j]]$typeInformation[[initStackList[[j]]$stackOnExit[[k]]]]$neededType=
-								higherType(tpInfoInit[[k]],blockList[[j]]$typeInformation[[initStackList[[j]]$stackOnExit[[k]]]]$neededType)
+						#browser()
+						blockList[[j]]$typeInformation[[initStackList[[j]]$stackOnExit[[k]]]]=
+							tpSetNeededType(
+								blockList[[j]]$typeInformation[[initStackList[[j]]$stackOnExit[[k]]]],
+								if (is.null(blockList[[j]]$typeInformation[[initStackList[[j]]$stackOnExit[[k]]]])) {
+									typeInformation[[k]]
+								} else {						
+									higherType(
+										typeInformation[[k]],
+										tpGetNeededType(blockList[[j]]$typeInformation[[initStackList[[j]]$stackOnExit[[k]]]])
+									)
+								}
+							)
 
 					}
 				}
-			}
-
-			if (initStackList[[i]]$stackPos == 0) {
-				initStackList[[i]]=NULL
-				blockList[[i]]$typeExitStack=NULL
+				blockList[[i]]$typeInformation=typeInformation[(initStack$stackPos+1):length(typeInformation)]
 			} else {
-				blockList[[i]]$typeExitStack=initStackList[[i]]
+				blockList[[i]]$typeInformation=typeInformation
+
 			}
 
-			blockList[[i]]$typeInformation=typeInformation
+			#the following if clause is concerned with the init stack that was returned with the invocation that just happened
+			if (initStackList[[i]]$stackPos == 0) {
+				initStackList[[i]]=NA
+				blockList[[i]]$typeExitStack=NULL
+				
+			} else {
+				#browser()
+				blockList[[i]]$typeExitStack=initStackList[[i]]
+				
+			}
+			
+			#browser()
 
 			
 
@@ -470,14 +511,28 @@ inferFunctionType = function(context, funcSignature=NULL) {
 
 		
 			if (as.character(source[blockList[[i]]$end]) == "RETURN.OP" || i==length(blockList)) {
-				returnType2=typeInformation[[blockList[[i]]$end-blockList[[i]]$start+1]]
-				if (is.null(returnType)) {
-			
-					returnType=returnType2
-				} else if (! typesMatch(returnType,returnType2)) {
-
-					returnType=higherType(returnType,returnType2)
-					returnTypeChanged=TRUE
+				#browser()
+				if (is.null(initStack)) {
+					returnType2=typeInformation[[blockList[[i]]$end-blockList[[i]]$start+1]]
+				} else {
+					returnType2=typeInformation[[blockList[[i]]$end-blockList[[i]]$start+1+initStack$stackPos]]
+				}
+				if (is.null(forcedReturnType)) {
+					if (is.null(returnType)) {
+						returnTypeChanged=TRUE
+						returnType=returnType2
+					} else if (! typesMatch(returnType,returnType2)) {
+						#browser()
+						newReturnType=higherType(returnType,returnType2)
+						returnTypeChanged= returnTypeChanged || (! typesMatch(returnType,newReturnType))
+						newReturnType=returnType
+					}
+				} else {
+					#browser()
+					if (! typesMatch(forcedReturnType,returnType2)) {
+						returnTypeChanged=TRUE
+						
+					}
 				}
 			}
 
@@ -489,8 +544,9 @@ inferFunctionType = function(context, funcSignature=NULL) {
 			for (i in 1:length(blockList)) {
 				if (as.character(source[blockList[[i]]$end]) == "RETURN.OP" || i==length(blockList)) {
 					typeInformation=blockList[[i]]$typeInformation
+					#browser()
 					returnType2=typeInformation[[blockList[[i]]$end-blockList[[i]]$start+1]]
-					returnType2$neededType=returnType
+					returnType2=tpSetNeededType(returnType2, returnType)
 					typeInformation[[blockList[[i]]$end-blockList[[i]]$start+1]]=returnType2
 					blockList[[i]]$typeInformation=typeInformation
 					#browser()
@@ -499,6 +555,7 @@ inferFunctionType = function(context, funcSignature=NULL) {
 		}			
 	}	
 
+	#browser()
 	for (i in 1:length(blockList)) {
 		printBlock(blockList[[i]], i, source[blockList[[i]]$start:blockList[[i]]$end])
 
@@ -517,18 +574,20 @@ initLlvmContext = function(modName, absPath) {
 	InitializeNativeTarget()
 
    # Create the module which will house the function
-	mod = Module(modName)
+	#mod = Module(modName)
+	#browser()
+	r_helper=new("r_module",modName)
 
 	#creating the debug builder
 	#browser()
-	debugBuilder = DIBuilder(mod)
+	debugBuilder = DIBuilder(r_helper$mod)
 	#debugDescriptor=newDebugDescriptor(debugBuilder, debugFile)
 
 	debugDouble=newDebugBasicType(debugBuilder, "double", 64, 64, 4 ) #4 = dwarf::DW_ATE_float
 	debugSEXP=newDebugPointerType(debugBuilder, debugDouble, "SEXP") #1 = DW_ATE_address
 	#debugDouble="q"
 	rType2LlvmDebug <- function(rType) {
-		switch(rType$name,
+		switch(tpGetName(rType),
 			"numeric" = { debugDouble },
 			"any" = { debugSEXP },
 			{stop(paste("Type",rType,"is unknown"))}
@@ -554,54 +613,20 @@ initLlvmContext = function(modName, absPath) {
 	#Resolve external FUNTAB symbol
 	R_FunTabSym = getNativeSymbolInfo("R_FunTab")
 	llvmAddSymbol(R_FunTabSym) # $address)
-	R_FunTab = createGlobalVariable("R_FunTab", mod, FunTabType)
+	R_FunTab = createGlobalVariable("R_FunTab", r_helper$mod, FunTabType)
 
-	#Resolve external Rf_lcons symbol
-	Rf_lconsType=functionType(SEXPType,c(SEXPType,SEXPType),0)
-	Rf_lconsSym = getNativeSymbolInfo("Rf_lcons")
-	llvmAddSymbol(Rf_lconsSym) # $address)
-	Rf_lcons = createGlobalVariable("Rf_lcons", mod, Rf_lconsType)
 
-	#R_NilValue
-	R_NilValueSym = getNativeSymbolInfo("R_NilValue")
-	llvmAddSymbol(R_NilValueSym) # $address)
-	R_NilValue = createGlobalVariable("R_NilValue", mod, SEXPType)
-
-	#Resolve external Rf_protect
-	Rf_protectType=functionType(SEXPType,c(SEXPType),0)
-	Rf_protectSym = getNativeSymbolInfo("Rf_protect")
-	llvmAddSymbol(Rf_protectSym) # $address)
-	Rf_protect = createGlobalVariable("Rf_protect", mod, Rf_protectType)
-
-	#Resolve external Rf_unprotect
-	Rf_unprotectType=functionType(VoidType,c(Int32Type),0)
-	Rf_unprotectSym = getNativeSymbolInfo("Rf_unprotect")
-	llvmAddSymbol(Rf_unprotectSym) # $address)
-	Rf_unprotect = createGlobalVariable("Rf_unprotect", mod, Rf_unprotectType)
-
-	#Resolve external Rf_allocVector
-	Rf_allocVectorType=functionType(SEXPType,c(Int32Type, Int32Type),0)
-	Rf_allocVectorSym = getNativeSymbolInfo("Rf_allocVector")
-	llvmAddSymbol(Rf_allocVectorSym) # $address)
-	Rf_allocVector = createGlobalVariable("Rf_allocVector", mod, Rf_allocVectorType)
-
-	#Resolve external Rf_duplicate
-	Rf_duplicateType=functionType(SEXPType,c(SEXPType),0)
-	Rf_duplicateSym = getNativeSymbolInfo("Rf_duplicate")
-	llvmAddSymbol(Rf_duplicateSym) # $address)
-	Rf_duplicate = createGlobalVariable("Rf_duplicate", mod, Rf_duplicateType)	
-
-	opAdd = createGlobalVariable("opAdd", mod,type=SEXPType,linkage=PrivateLinkage)
+	opAdd = createGlobalVariable("opAdd", r_helper$mod,type=SEXPType,linkage=PrivateLinkage)
 	setInitializer(opAdd,getNULLPointer(SEXPType))
 
-	opMul = createGlobalVariable("opMul", mod,type=SEXPType,linkage=PrivateLinkage)
+	opMul = createGlobalVariable("opMul", r_helper$mod,type=SEXPType,linkage=PrivateLinkage)
 	setInitializer(opMul,getNULLPointer(SEXPType))
 
-	opGt = createGlobalVariable("opGt", mod,type=SEXPType,linkage=PrivateLinkage)
+	opGt = createGlobalVariable("opGt", r_helper$mod,type=SEXPType,linkage=PrivateLinkage)
 	setInitializer(opGt,getNULLPointer(SEXPType))
 
 	setOpFunArgTypes=c(add=SEXPType, mul=SEXPType, gt=SEXPType)
-	setOpFun = Function("setOp", VoidType, setOpFunArgTypes , mod)
+	setOpFun = Function("setOp", VoidType, setOpFunArgTypes , r_helper$mod)
 
 	params = getParameters(setOpFun)  
 
@@ -618,19 +643,19 @@ initLlvmContext = function(modName, absPath) {
 
 	anyBinOp=function(ir,x,y,opNumber,op,cntProtected) {
 
-		R_NilValue2=createLoad(ir,R_NilValue)
+		R_NilValue2=createLoad(ir,r_helper$R_NilValue)
 
- 		tmp=createCall(ir,Rf_lcons,y,R_NilValue2)
-		createCall(ir,Rf_protect,tmp)
-		argList=createCall(ir,Rf_lcons,x,tmp)
-		createCall(ir,Rf_protect,tmp)
+ 		tmp=createCall(ir,r_helper$Rf_lcons,y,R_NilValue2)
+		createCall(ir,r_helper$Rf_protect,tmp)
+		argList=createCall(ir,r_helper$Rf_lcons,x,tmp)
+		createCall(ir,r_helper$Rf_protect,tmp)
 
 		op2=createLoad(ir,op)
 		callPointer=createGEP(ir,R_FunTab,c(createConstant(ir,opNumber),createConstant(ir,1L)))
 
 		callPointer2=createLoad(ir,callPointer)
 		plusCall=createCall(ir,callPointer2,R_NilValue2,op2,argList,R_NilValue2)
-		createCall(ir,Rf_protect,plusCall)
+		createCall(ir,r_helper$Rf_protect,plusCall)
 		
 		createStore(ir,binOp(ir, Add, createLoad(ir,cntProtected),3L),cntProtected)
 		plusCall
@@ -639,11 +664,11 @@ initLlvmContext = function(modName, absPath) {
 	debugCompUnit = newDebugCU(debugBuilder, basename(absPath), dirname(absPath))
 	#
 
-	res=list(debugBuilder=debugBuilder, rType2LlvmDebug=rType2LlvmDebug, mod=mod,
-		R_NilValue=R_NilValue, Rf_protect=Rf_protect, Rf_unprotect=Rf_unprotect,
+	res=list(debugBuilder=debugBuilder, rType2LlvmDebug=rType2LlvmDebug, mod=r_helper$mod,
+		r_helper=r_helper,
 		setOpFun=setOpFun, setOpFunArgTypes=setOpFunArgTypes, debugCompUnit=debugCompUnit,
-		Rf_duplicate=Rf_duplicate, Rf_allocVector=Rf_allocVector,anyBinOp=anyBinOp,
-		opAdd=opAdd, opGt=opGt)
+		anyBinOp=anyBinOp,
+		opAdd=opAdd, opGt=opGt, opMul=opMul)
 }
 
 compile2llvm = function(context, llvmContext) {
@@ -663,16 +688,19 @@ compile2llvm = function(context, llvmContext) {
 	rType2LlvmDebug=llvmContext$rType2LlvmDebug
 	mod=llvmContext$mod
 	debugCompUnit=llvmContext$debugCompUnit
-	Rf_duplicate=llvmContext$Rf_duplicate
-	Rf_allocVector=llvmContext$Rf_allocVector
-	Rf_protect=llvmContext$Rf_protect
+
+	r_helper=llvmContext$r_helper
+
 	anyBinOp=llvmContext$anyBinOp
 	opAdd=llvmContext$opAdd
+	opMul=llvmContext$opMul
 	opGt=llvmContext$opGt
 
 
 
 	debugSignature=list()
+
+	#browser()
 
 	for (i in 1:length(argList)) {
 		arg=args[[argList[i]]]
@@ -717,6 +745,8 @@ compile2llvm = function(context, llvmContext) {
 			#createStore(ir,val=as.integer(length(params)),cntProtected)
 			createStore(ir,val=0L,cntProtected)
 
+			#browser()
+
 			for (j in 1:length(vars)) {
 				varName=names(vars)[j]
 				if (is.null(llvmSignature[[varName]])) {
@@ -737,15 +767,15 @@ compile2llvm = function(context, llvmContext) {
 		blockOps[[tpAny]]=list(
 			coerce=function(x,type) {
 				#browser()
-				switch(type$name,
+				switch(tpGetName(type),
 					any={x},
 					numeric={
-						if (type$vector) {
+						if (tpGetVectorLength(type) != 1) {
 							stop("numeric vectors not supported")
 						}
-						newVector=createCall(ir,Rf_allocVector,createConstant(ir,14L),createConstant(ir,1L))
+						newVector=createCall(ir,r_helper$Rf_allocVector,createConstant(ir,14L),createConstant(ir,1L))
 						#newVector=createCall(ir,Rf_allocVector,14L,1L)
-						createCall(ir,Rf_protect,newVector)
+						createCall(ir,r_helper$Rf_protect,newVector)
 						newVector3=createBitCast(ir, newVector,pointerType(DoubleType))
 						#data=createGEP(ir,newVector3,c(createConstant(ir,0L),createConstant(ir,9L)))
 						data=createGEP(ir,newVector3,c(createConstant(ir,5L)))
@@ -753,38 +783,55 @@ compile2llvm = function(context, llvmContext) {
 						createStore(ir,binOp(ir, Add, createLoad(ir,cntProtected),1L),cntProtected)
 						newVector
 					},
-					{stop(paste("no coercion from",type$name,"to any"))}
+					{stop(paste("no coercion from",tpGetName(type),"to any"))}
 				)
 			},
 			readVar=function(ir,x) {
-				blockOps[[tpAny]]$dup(ir,x)
+				#blockOps[[tpAny]]$dup(ir,x)
+				x
 			},
 			dup=function(ir,x) {
-				newVector=createCall(ir,Rf_duplicate,x)
-				createCall(ir,llvmContext$Rf_protect,newVector)
+				newVector=createCall(ir,r_helper$Rf_duplicate,x)
+				createCall(ir,r_helper$Rf_protect,newVector)
 				createStore(ir,binOp(ir, Add, createLoad(ir,cntProtected),1L),cntProtected)
 				newVector
 			},
+
+			subset2=function(ir, vector, element) {
+				createStore(ir,binOp(ir, Add, createLoad(ir,cntProtected),3L),cntProtected)
+				r_helper$r_subset2(ir,vector,element)
+			},
 			mul=function(ir,x,y) {
-				anyBinOp(ir,x,y,62L,opMul,cntProtected)
+				anyBinOp(ir,blockOps[[tpAny]]$dup(ir,x),blockOps[[tpAny]]$dup(ir,y),62L,opMul,cntProtected)
 			},
 			add=function(ir,x,y) {
-				anyBinOp(ir,x,y,62L,opAdd,cntProtected)
+				anyBinOp(ir,blockOps[[tpAny]]$dup(ir,x),blockOps[[tpAny]]$dup(ir,y),62L,opAdd,cntProtected)
+			},
+
+
+			eq=function(ir,x,y) {
+				browser()
+				createStore(ir,binOp(ir, Add, createLoad(ir,cntProtected),3L),cntProtected)
+				r_helper$r_comp_eq(ir,x,y)
 			},
 			gt=function(ir,x,y) {
-				anyBinOp(ir,x,y,72L,opGt,cntProtected)
+				anyBinOp(ir,blockOps[[tpAny]]$dup(ir,x),blockOps[[tpAny]]$dup(ir,y),72L,opGt,cntProtected)
 			},
+
 			cleanup=function(ir) {
-				createCall(ir,llvmContext$Rf_unprotect,createLoad(ir,cntProtected))
+				createCall(ir,r_helper$Rf_unprotect,createLoad(ir,cntProtected))
 			}
 		)
 
 		blockOps[[tpLogical]]=list(
 			coerce=function(x,type) {
 				#browser()
-				switch(type$name,
+				switch(tpGetName(type),
 					any={
-						if (type$vector) {
+						if (tpGetSubname(type) != tpLogical) {
+							stop("type must be logical")
+						}
+						if (tpGetVectorLength(type) != 1) {
 							stop("numeric vectors not supported")
 						}
 						value=createBitCast(ir, x,pointerType(Int32Type))
@@ -852,6 +899,8 @@ compile2llvm = function(context, llvmContext) {
 				}
 			}
 		}
+
+		initStack$insStart = 0
 		initStackList[[i]]=visitStackMachine(source[blockList[[i]]$start:blockList[[i]]$end], myCompiler, initStack)
 		
 		if (i<length(blockList) & (!(block$terminatingBranch))) {
@@ -936,7 +985,7 @@ byte2llvm = function(func) {
 	#browser()
 	funcName=deparse(substitute(func))
 	ctxt=initCompileContext(func,funcName)
-	ctxt=inferFunctionType(ctxt)
+	ctxt=inferFunctionType(context=ctxt,forcedReturnType=getType(name=tpAny))
 
 	llvmContext=initLlvmContext(funcName, ctxt$absPath)
 	llvmFun=compile2llvm(ctxt,llvmContext)

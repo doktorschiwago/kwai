@@ -68,8 +68,8 @@ STARTSUBASSIGN.OP = 2,
 DFLTSUBASSIGN.OP = 0,
 STARTC.OP = 2,
 DFLTC.OP = 0,
-STARTSUBSET2.OP = 2,
-DFLTSUBSET2.OP = 0,
+"STARTSUBSET2.OP" = 2,
+"DFLTSUBSET2.OP" = 0,
 STARTSUBASSIGN2.OP = 2,
 DFLTSUBASSIGN2.OP = 0,
 DOLLAR.OP = 2,
@@ -87,8 +87,8 @@ NVECELT.OP = 0,
 NMATELT.OP = 0,
 SETNVECELT.OP = 0,
 SETNMATELT.OP = 0,
-AND1ST.OP = 2,
-AND2ND.OP = 1,
+"AND1ST.OP" = 2,
+"AND2ND.OP" = 1,
 OR1ST.OP = 2,
 OR2ND.OP = 1,
 GETVAR_MISSOK.OP = 1,
@@ -142,21 +142,28 @@ Opcodes.stack <- list(
 "LDNULL.OP" = 1,
 "PUSHARG.OP" = 96,
 
-"DODOTS.OP" = 1
+"DODOTS.OP" = 1,
+
+"AND1ST.OP" = 99,
+
+"STARTSUBSET2.OP" = 99,
+"DFLTSUBSET2.OP" = -1
 )
 
 
 
 visitStackMachine <- function(source,func, initStack=NULL) {
-	i=1
+	
 	length=length(source)
-
+	i=1
 	if (is.null(initStack)) {
 		insNo=0
 		insList=list()
+		insStart=0
 	} else {
 		insNo=initStack$stackPos
 		insList=initStack$stackOnExit
+		insStart=initStack$insStart
 	} 
 
 	funArgCounter=list()
@@ -184,10 +191,10 @@ visitStackMachine <- function(source,func, initStack=NULL) {
 		if (is.null(insNo2)) {
 			stop(paste("Opcode ",op, " not supported"))
 		} else if (insNo2==99) {
-			func(op,i,insList,insNo,args)
+			func(op,i+insStart,insList,insNo,args)
 			deltaStack=0
 		} else if (insNo2==98) {
-			func(op,i,insList,insNo,args)
+			func(op,i+insStart,insList,insNo,args)
 			insNo=insNo-1
 			deltaStack=-1
 		} else if (insNo2==97) {
@@ -196,7 +203,7 @@ visitStackMachine <- function(source,func, initStack=NULL) {
 			deltaStack=insNo2
 			insNo2=insNo2+insNo
 
-			insList[[insNo2]]=func(op,i,insList,insNo,args)
+			insList[[insNo2]]=func(op,i+insStart,insList,insNo,args)
 			insNo=insNo2
 		} else if (insNo2==96) {
 			deltaStack=0
@@ -205,7 +212,7 @@ visitStackMachine <- function(source,func, initStack=NULL) {
 
 			if (insNo2<1) { browser() }
 
-			insList[[insNo2]]=func(op,i,insList,insNo,args)
+			insList[[insNo2]]=func(op,i+insStart,insList,insNo,args)
 			insNo=insNo2
 		
 			

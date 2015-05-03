@@ -2,8 +2,21 @@
 
 library(kwai)
 
+
+
+myfunction <- function(arg1,arg2){
+	qq=arg1+1
+	qq2=arg1+1
+	if (qq2>arg2) {
+		return(qq)
+	} else {
+		return(-11)
+	}
+}
+
+
 #debug(inferType2)
-sexpType=getType(tpAny,FALSE)
+sexpType=getType(tpAny)
 posList=list()
 posList[[1]]=sexpType
 posList[[2]]=sexpType

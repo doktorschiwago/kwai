@@ -1,9 +1,9 @@
 Package: kwai
-Title: What the Package Does (one line, title case)
+Title: Yet Another R Compiler
 Version: 0.0.0.9000
-Authors@R: person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
-Description: What the package does (one paragraph)
+Authors@R: person("Christoph", "Klein", , "christoph.klein23@googlemail.com", role = c("aut", "cre"))
+Description: Building upon the compiler package and Rllvm, this package compiles R code to machine code
 Depends: R (>= 3.1.1), Rllvm, compiler, ref
 License: What license is it under?
 LazyData: true
-Collate: typelib.R compile.R createIR.R visitStackMachine.R inferType.R
+Collate: typelib.R compile.R createIR.R visitStackMachine.R inferType.R llvm_helper.R
