@@ -1,23 +1,5 @@
 
 
-
-
-inferBuiltinType <- function(funcName) {
-	switch(funcName,
-		"as.character" = ,
-		"error" =,
-		"is.na" = ,
-		"pmatch" = ,
-		"list" = ,
-		"length" = {
-			return(getType(tpAny))
-		},
-		{
-			stop(paste("unknown function: ",funcName))
-		}
-	)
-}
-
 getMultipleLength = function(x,y) {
 	if (x==y) {
 		return(x)
@@ -40,113 +22,58 @@ getMultipleLength = function(x,y) {
 	return(big)
 }
 
+inferTypeStubs=list(
+	list(
+		opcodes=c("SUB.OP", "MUL.OP", "ADD.OP"),
+		func=function(expression) {
+			currentNeededType<<-lowerType(higherType(left_operand,right_operand),currentNeededType)	
+			left_operand<<-tpSetNeededType(left_operand, higherType(tpGetNeededType(left_operand),currentNeededType))
+			right_operand<<-tpSetNeededType(right_operand, higherType(tpGetNeededType(right_operand),currentNeededType))
+			return(currentNeededType)
+		}
+	),
+	list(
+		opcodes=c("EQ.OP", "GE.OP", "GT.OP", "LE.OP", "LT.OP"),
+		func=function(expression) {
+			newType=higherType(left_operand,right_operand)						
 
-inferType2 <- function(op,insNo,insList,insNo2,args,vars,constants,typeInformation, changed) {
-	tpInfo=deref(typeInformation)
-	argTypes=list()
-
-	#browser()
-
-	if (is.null(tpInfo[insNo][[1]])) {
-		currentNeededType=NULL
-	} else {
-		currentNeededType=tpGetNeededType(tpInfo[[insNo]])
-	}
-	switch(op,
-		"SUB.OP" = ,
-		"MUL.OP" = ,
-		"ADD.OP" = ,
-		"EQ.OP" = , 
-		"GT.OP" = {
-			#browser()
-			argTypes$A=tpInfo[[insList[[insNo2-1]]]]
-			argTypes$B=tpInfo[[insList[[insNo2]]]]
-			#browser()
-
-			switch(op,
-				"EQ.OP" = ,
-				"GT.OP" = {
-					#if (! is.null(currentNeededType)) {
-					#	newType=higherType(currentNeededType,getType(name=tpLogical,vector=currentNeededType$vector))
-					#} else 
-
-					newType=higherType(argTypes$A,argTypes$B)						
-
-					if (tpGetName(newType) == tpAny) {
-						newType=getType(name=tpAny,
-							subName=tpLogical,
-							vectorLength=tpGetVectorLength(newType))
-					} else if (tpGetName(newType) == tpNumeric) {
-						newType=getType(name=tpLogical,vectorLength=tpGetVectorLength(newType))
-					} else {
-						stop("unreachable")
-					}
-
-					if (! is.null(currentNeededType)) {
-					
-						if (tpGetName(currentNeededType) == tpAny) {
-							neededType=currentNeededType
-						} else {
-							neededType=lowerType(argTypes$A,argTypes$B)
-						}
-						argTypes$A=tpSetNeededType(argTypes$A, higherType(tpGetNeededType(argTypes$A),neededType))
-						argTypes$B=tpSetNeededType(argTypes$B, higherType(tpGetNeededType(argTypes$B),neededType))
-					} else {
-						neededType=NULL
-					}
-				},
-				{
-					newType=lowerType(higherType(argTypes$A,argTypes$B),currentNeededType)
-					neededType=newType		
-					argTypes$A=tpSetNeededType(argTypes$A, higherType(tpGetNeededType(argTypes$A),neededType))
-					argTypes$B=tpSetNeededType(argTypes$B, higherType(tpGetNeededType(argTypes$B),neededType))		
-				}			
-			)
-			#browser()
-
-			tpInfo[[insList[[insNo2-1]]]]=argTypes$A
-			tpInfo[[insList[[insNo2]]]]=argTypes$B
-		},
-		"GETVAR.OP" = {
-			newType=deref(vars)[[as.character(constants[[1+args[1]]])]]
-		
-			if (is.null(newType)) {
-				stop(paste("Variable ",as.character(constants[[1+args[1]]]), "not defined before"))
+			if (tpGetName(newType) == tpAny) {
+				newType=getType(name=tpAny,
+					subName=tpLogical,
+					vectorLength=tpGetVectorLength(newType))
+			} else if (tpGetName(newType) == tpNumeric) {
+				newType=getType(name=tpLogical,vectorLength=tpGetVectorLength(newType))
+			} else {
+				stop("unreachable")
 			}
-		},	
-		"STARTSUBSET2.OP" =,
-		"AND1ST.OP" =,
-		"BRIFNOT.OP" =,
-		"GOTO.OP" =,
-		"POP.OP" = {
-			newType=getType(name=tpVoid)
-			if (op == "BRIFNOT.OP") {
-				argTypes$A=tpInfo[[insList[[insNo2]]]]
-				neededType=getType(name=tpLogical,vectorLength=1)
-				argTypes$A=tpSetNeededType(argTypes$A,higherType(neededType,tpGetNeededType(argTypes$A)))
-				tpInfo[[insList[[insNo2]]]]=argTypes$A
-			}
-		},
-		"SETVAR.OP" = {
-			#browser()
-			varname=as.character(constants[[1+args[1]]])
-			var=deref(vars)[[varname]]
-			newType=tpInfo[[insList[[insNo2]]]]
-			if (is.null(var)) {
-				deref(vars)[[varname]]=newType
-			} else if (! typesMatch(deref(vars)[[varname]],newType)) {
-				newType=higherType(deref(vars)[[varname]],newType)
-				deref(vars)[[varname]]=newType
-			}
-			argTypes$A=newType
+
+			if (! is.null(currentNeededType)) {
 			
-		},
-		"PUSHCONSTARG.OP" =,
-		"LDCONST.OP" = {
-			#browser()
-			var=constants[[1+args[1]]]
+				if (tpGetName(currentNeededType) == tpAny) {
+					neededType=currentNeededType
+				} else {
+					neededType=lowerType(left_operand,right_operand)
+				}
+				left_operand=tpSetNeededType(left_operand, higherType(tpGetNeededType(left_operand),neededType))
+				right_operand=tpSetNeededType(right_operand, higherType(tpGetNeededType(right_operand),neededType))
+			} else {
+				neededType=NULL
+			}
+			return(newType)
+		}
+	),
+	list(
+		opcodes=c("AND2ND.OP"),
+		func=function(expression) {
+			newType=getType(name=tpLogical, vectorLength=1)
+			return(newType)
+		}
+	),
+	list(
+		opcodes=c("LDCONST.OP", "PUSHCONSTARG.OP"),
+		func=function(value) {
 			
-			if (typeof(var)=="double") {
+			if (typeof(value)=="double") {
 				if (is.null(currentNeededType) || tpGetName(currentNeededType)==tpNumeric) {
 					newType=getType(name=tpNumeric, vectorLength=length(var))
 				} else {
@@ -155,31 +82,72 @@ inferType2 <- function(op,insNo,insList,insNo2,args,vars,constants,typeInformati
 			} else {
 				newType=getType(name=tpAny)
 			}
-				
-		},
-		"RETURN.OP" = {
+			return(newType)
+		}
+	),
+	list(
+		opcodes=c("LDNULL.OP"),
+		func=function(expression) {
+			newType=getType(name=tpNull, vectorLength=1)
+			return(newType)
+		}
+	),
+	list(
+		opcodes=c("GETVAR.OP"),
+		func=function(varName) {
+			newType=vars[[varName]]
+		
+			if (is.null(newType)) {
+				stop(paste("Variable ",varName, "not defined before"))
+			}
+			return(newType)
+		}
+	),
+	list(
+		opcodes=c("SETVAR.OP"),
+		func=function(varName) {
 			#browser()
-			
-			argTypes$A=tpInfo[[insList[[insNo2]]]]
-			
+			var=vars[[varName]]
+			if (is.null(var)) {
+				vars[[varName]]<<-val
+				newType=val
+			} else if (! typesMatch(var,val)) {
+				newType=higherType(var,val)
+				vars[[varName]]<<-newType
+			} else {
+				newType=val
+			}
+			return(newType)
+		}
+	),
+	list(
+		opcodes=c("BRIFNOT.OP", "GOTO.OP", "POP.OP"),
+		func=function(...) {
+			return(getType(name=tpVoid))
+		}
+	),
+	list(
+		opcodes=c("RETURN.OP"),
+		func=function() {
 			if (! is.null(currentNeededType)) {
-				argTypes$A=tpSetNeededType(argTypes$A,higherType(currentNeededType,tpGetNeededType(argTypes$A)))
-				tpInfo[[insList[[insNo2]]]]=argTypes$A
+				val<<-tpSetNeededType(val,higherType(currentNeededType,tpGetNeededType(val)))
 				newType=currentNeededType
 				newType=tpSetNeededType(newType, currentNeededType)
 			} else {
-				newType=tpInfo[[insList[[insNo2]]]]
+				newType=val
 			}
-		},
-		"GETINTLBUILTIN.OP" =,
-		"GETBUILTIN.OP" =,
-		"GETFUN.OP" = {
-			#browser()
+			return(newType)
+		}
+	),
+	list(
+		opcodes=c("GETFUN.OP", "GETBUILTIN.OP", "GETINTLBUILTIN.OP"),
+		func=function(funName) {
 			newType=getType(name=tpFunctionName)
-			newType=tpSetFunName(newType,as.character(constants[[1+args[1]]]))
-			switch(op,
+			newType=tpSetFunName(newType,funName)
+			switch(opName,
 				"GETFUN.OP" = { 
-					funBody=body(get(as.character(constants[[1+args[1]]])))
+					#browser()
+					funBody=body(get(funName, envir=globalenv()))
 					if (is.null(funBody)) {
 						newType=tpSetFunClass(newType,"primitive")
 					} else {
@@ -190,47 +158,51 @@ inferType2 <- function(op,insNo,insList,insNo2,args,vars,constants,typeInformati
 				"GETINTLBUILTIN.OP" = { newType=tpSetFunClass(newType,"internal")},
 				{stop("who am i?")}
 			)
-		},
-		"MAKEPROM.OP" = {
+			return(newType)
+		}
+	),
+	list(
+		opcodes=c("MAKEPROM.OP"),
+		func=function(code) {
 			#browser()
 
-			changed2=FALSE
-			changed3=as.ref(changed2)
 
-
-			if (is.null(tpInfo[insNo][[1]])) {
+			if (is.null(typeArray[opNumber][[1]])) {
 				tmpType=list(promiseList=list())
 				promTypeList=tmpType$promiseList
 			} else {
-				tmpType=tpInfo[[insNo]]
+				tmpType=typeArray[[opNumber]]
 				promTypeList=tpGetPromiseList(tmpType)
 			}
 
-			promSource=constants[[1+args[1]]]
-			promIns=promSource[[2]][-1]
-			promConst=promSource[[3]]
+			promIns=code[[2]][-1]
+			promConst=code[[3]]
 
-			
-			promTypeList2=as.ref(promTypeList)
+			tm=getInferTypeManager(promTypeList, vars)
 
-			myInferType<-function(op,insNo,insList,insNo2,args2) {
-				inferType2(op,insNo,insList,insNo2,args2,vars,promConst,promTypeList2,changed3)
-			}
+			visitStackMachine2(promIns,promConst,tm)
+			#browser()
 
-
-			visitStackMachine(promIns,myInferType)
+			promTypeList=tm$environ$typeArray
 
 			newType = promTypeList[length(promIns)][[1]]
 			newType = tpSetPromiseList(newType,promTypeList)
-		},
-		"CALLBUILTIN.OP" =,
-		"CALL.OP" = {
+			return(newType)
+		}
+	),
+	list(
+		opcodes=c("PUSHFALSEARG.OP"),
+		func=function() {
+			newType=getType(name=tpLogical, vectorLength=1)
+			return(newType)
+		}
+	),
+	list(
+		opcodes=c("CALL.OP", "CALLBUILTIN.OP"),
+		func=function(expression, argCount) {
 			#browser()
-			callSymbol=constants[[1+args[[1]]]]
-			argCount=length(callSymbol)-1
-			functionType=tpInfo[[insList[[insNo2-argCount]]]]
 			
-			if (tpGetFunClass(functionType) == "function") {
+			if (tpGetFunClass(fun) == "function") {
 				
 				
 				argListPos=list()
@@ -241,87 +213,160 @@ inferType2 <- function(op,insNo,insList,insNo2,args,vars,constants,typeInformati
 				if (argCount>0) {
 					for (i in (1:argCount)) {
 						#browser()
-						if (length(tpGetArgName(tpInfo[[insList[[insNo2+1-i]]]])) == 0) {
-							argListPos[[argListPosCount+1]]=tpInfo[[insList[[insNo2+1-i]]]]
+						arg=get(paste(sep="_","callArg",i))
+						if (length(tpGetArgName(arg)) == 0) {
+							argListPos[[argListPosCount+1]]=arg
 							argListPosCount=argListPosCount+1;
 						} else {
-							argListNamed[[tpGetArgName(tpInfo[[insList[[insNo2+1-i]]]])]]=tpInfo[[insList[[insNo2+1-i]]]]
-							argListNamedPos[[i]]=tpGetArgName(tpInfo[[insList[[insNo2+1-i]]]])
+							argListNamed[[tpGetArgName(arg)]]=arg
+							argListNamedPos[[i]]=tpGetArgName(arg)
 						}
 					}
 				}
-				ctxt=initCompileContext(get(tpGetFunName(functionType)),tpGetFunName(functionType))
-				ctxt=inferFunctionType(ctxt,list(pos=argListPos,named=argListNamed))
+				ctxt=initCompileContext(get(tpGetFunName(fun), envir=globalenv()),tpGetFunName(fun))
+				ctxt=inferFunctionType(ctxt,funcSignature=list(pos=argListPos,named=argListNamed))
 				newType=ctxt$returnType
-				newType = tpSetFuncType(newType,functionType)
+				newType = tpSetFuncType(newType,fun)
 				newType = tpSetFuncContext(newType, ctxt)
 				newType = tpSetArgListNamedPos(newType, argListNamedPos)
 			} else {
 				#browser()
-				newType=inferBuiltinType(as.character(callSymbol[1]))
-				newType = tpSetFuncType(newType,functionType)	
+				newType = getType(tpAny)
+				newType = tpSetFuncType(newType,getType(tpAny))	
 			}
-			
-		},
-		"SETTAG.OP" = {
-			#browser()			
-			newType=tpInfo[[insList[[insNo2]]]]
-			newType=tpSetArgName(newType,as.character(constants[[1+args[1]]]))
-		},
-		"CALLSPECIAL.OP" = {
-			#browser()
-			switch(as.character(constants[[1+args[1]]][1]),
-				"missing" = {
-					newType=getType(name=tpLogical, vector=FALSE)
-				}, {
-					stop(paste("CALLSPECIAL.OP ",op, " not supported"))
-				}
-			)
-		},
-		"LDNULL.OP" = {
-			newType=getType(name=tpNull,vector=FALSE)
-		},
-		"DODOTS.OP" = {
-			newType=getType(name=tpDots)
-		},
-		"DFLTSUBSET2.OP" = {
-			varType=tpInfo[[insList[[insNo2-1]]]]
-			subsetType=tpInfo[[insList[[insNo2]]]]
-
-			if (varType$vector==FALSE) {
-				stop("Trying to subset sth. that is not a vector")
-			}
-
-			newType=varType
-
-			if (subsetType$vector==FALSE) {
-				newType$vector=FALSE
-			}
-		
-			
-		},
-		{
-			stop(paste("Opcode ",op, " not supported"))
+			return(newType)
+		}
+	),	
+	list(
+		opcodes=c("CALLSPECIAL.OP"),
+		func=function(expression) {
+			newType=getType(name=tpAny)
+			return(newType)
+		}
+	),
+	list(
+		opcodes=c("DODOTS.OP"),
+		func=function() {
+			return(getType(name=tpDots))
+		}
+	),
+	list(
+		opcodes=c("AND1ST.OP", "PUSHARG.OP", "STARTSUBSET2.OP"),
+		func=function(...) {
+			return(val)
+		}
+	),
+	list(
+		opcodes=c("SETTAG.OP"),
+		func=function(argName) {
+			newType=tpSetArgName(val,argName)
+			return(newType)
+		}
+	),
+	list(
+		opcodes=c("DFLTSUBSET2.OP"),
+		func=function() {
+			newType=tpSetVectorLength(variable,1)
+			return(newType)
 		}
 	)
+)
+
+inferTypeHandler=function(..., opNumber, opName, argTypes) {
+	args=list(...)
+
+	env=new.env()
+
+	args2=list()
 	
-	if (is.null(tpInfo[insNo][[1]])) {
-		deref(changed)=TRUE
-		newType=tpSetNeededType(newType, NULL)
-	} else {
-		currentType=tpInfo[[insNo]]
-		deref(changed)=(! (typesMatch(currentType,newType)))
-		if (deref(changed)) {
-			#browser()
+
+	for (arg in names(argTypes)) {
+		
+		if (argTypes[[arg]] == "stack") {
+			#replacing stack arguemnts with the entry in the stack array
+			env[[arg]]=typeArray[[args[[arg]]]]
+		} else {
+			args2[[arg]]=args[[arg]]
 		}
 	}
+
+	if (is.null(typeArray[opNumber][[1]])) {
+		env$currentNeededType=NULL
+	} else {
+		env$currentNeededType=tpGetNeededType(typeArray[[opNumber]])
+	}
+
+	#env$vars=vars
+	#env$typeArray=parent.env(parent.env(environment()))$typeArray
 	#browser()
-	newType=tpSetArgs(newType,argTypes)
-	tpInfo[[insNo]]<-newType
-	deref(typeInformation)=tpInfo
-	insNo
-	
+
+	func=func
+	parent.env(env)=environment()
+	environment(func)=env
+
+	if (is.null(func)) {
+		stop(paste("no handler for op=", opName, " avaiable!"))
+	}
+
+	res=do.call(func,args2, envir=env)
+
+	opArgTypes=list()
+
+	for (arg in names(argTypes)) {
 		
+		if (argTypes[[arg]] == "stack") {
+			#propragatin needed type
+			typeArray[[args[[arg]]]]<<-env[[arg]]
+			#collecting args
+			opArgTypes[[arg]]=env[[arg]]
+		}		
+	}
+
+
+	#if (! typesMatch(res, getType(name=tpVoid))) {
+	res=tpSetNeededType(res,env$currentNeededType)
+	res=tpSetArgs(res,opArgTypes)
+
+	#browser()
+
+	if (is.null(typeArray[opNumber][[1]])) {
+		changed<<-TRUE
+	} else {
+		changed<<-(changed || (! (typesMatch(typeArray[[opNumber]],res))))
+	}
+
+	typeArray[opNumber]<<-res
+	#}
+	#typeArray<<-env$typeArray
+	#vars<<-env$vars
+
+	return(opNumber)
+}
+
+getInferTypeManager = function(typeArray, vars) {
+	res=list()
+	env=new.env()
+
+	#browser()
+	parent.env(env)=parent.env(environment(inferTypeHandler))
+	
+	env$typeArray=typeArray
+	env$vars=vars
+	env$changed=FALSE
+
+	for (opGroup in inferTypeStubs) {
+		for (op in opGroup$opcodes) {
+			res[[op]]=inferTypeHandler
+			environment(res[[op]])=new.env()
+			parent.env(environment(res[[op]]))=env
+			environment(res[[op]])$func=opGroup$func
+		}
+	}
+
+	#browser()
+
+	res$environ=env
+	return(res)
 }
 
 

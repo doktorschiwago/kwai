@@ -33,10 +33,10 @@ createIR <- function(op,insNo,insList,insNo2,args,ir,params,constants, blockList
 
 			typeInformation=blockList[[currentBlock]]$typeInformation[[insNo]]
 			typeOp=blockOps[[tpGetName(typeInformation)]]
-			typeOpA=blockOps[[tpGetName(tpGetArg(typeInformation, "A"))]]
-			typeOpB=blockOps[[tpGetName(tpGetArg(typeInformation, "B"))]]
-			argA=typeOp$coerce(insList[[insNo2-1]], tpGetArg(typeInformation, "A"))
-			argB=typeOp$coerce(insList[[insNo2]], tpGetArg(typeInformation, "B"))
+			typeOpA=blockOps[[tpGetName(tpGetArg(typeInformation, "left_operand"))]]
+			typeOpB=blockOps[[tpGetName(tpGetArg(typeInformation, "right_operand"))]]
+			argA=typeOp$coerce(insList[[insNo2-1]], tpGetArg(typeInformation, "left_operand"))
+			argB=typeOp$coerce(insList[[insNo2]], tpGetArg(typeInformation, "right_operand"))
 			switch(op,
 				"MUL.OP" = {
 					typeOp$mul(ir,argA,argB)
@@ -63,13 +63,13 @@ createIR <- function(op,insNo,insList,insNo2,args,ir,params,constants, blockList
 			debugSetLocation(ir, debugFunction, attr(constants[[1+args[[1]]]],"srcref")[1], attr(constants[[1+args[[1]]]],"srcref")[5])
 
 			typeInformation=blockList[[currentBlock]]$typeInformation[[insNo]]
-			if (typesMatch(tpGetArg(typeInformation, "A"), tpGetArg(typeInformation, "B"))) {
-				typeOp=blockOps[[tpGetName(tpGetArg(typeInformation, "A"))]]
+			if (typesMatch(tpGetArg(typeInformation, "left_operand"), tpGetArg(typeInformation, "right_operand"))) {
+				typeOp=blockOps[[tpGetName(tpGetArg(typeInformation, "left_operand"))]]
 			} else {
-				typeOp=blockOps[[tpGetName(higherType(tpGetArg(typeInformation, "A"), tpGetArg(typeInformation, "B")))]]
+				typeOp=blockOps[[tpGetName(higherType(tpGetArg(typeInformation, "left_operand"), tpGetArg(typeInformation, "right_operand")))]]
 			}
-			argA=typeOp$coerce(insList[[insNo2-1]],tpGetArg(typeInformation, "A"))
-			argB=typeOp$coerce(insList[[insNo2]],tpGetArg(typeInformation, "B"))
+			argA=typeOp$coerce(insList[[insNo2-1]],tpGetArg(typeInformation, "left_operand"))
+			argB=typeOp$coerce(insList[[insNo2]],tpGetArg(typeInformation, "right_operand"))
 			switch(op,
 				"EQ.OP" = {
 					
@@ -90,7 +90,7 @@ createIR <- function(op,insNo,insList,insNo2,args,ir,params,constants, blockList
 			debugSetLocation(ir, debugFunction, attr(constants[[1+args[[1]]]],"srcref")[1], attr(constants[[1+args[[1]]]],"srcref")[5])
 
 			typeInformation=blockList[[currentBlock]]$typeInformation[[insNo]]
-			typeInformationArg=tpGetArg(typeInformation, "A")
+			typeInformationArg=tpGetArg(typeInformation, "val")
 			typeOpLogical=blockOps[["logical"]]
 			typeOp=blockOps[[tpGetName(typeInformationArg)]]
 			
@@ -118,7 +118,7 @@ createIR <- function(op,insNo,insList,insNo2,args,ir,params,constants, blockList
 			
 			typeInformation=blockList[[currentBlock]]$typeInformation[[insNo]]
 			typeOp=blockOps[[tpGetName(typeInformation)]]
-			retVal=typeOp$coerce(insList[[insNo2]], tpGetArg(typeInformation, "A"))
+			retVal=typeOp$coerce(insList[[insNo2]], tpGetArg(typeInformation, "val"))
 			
 			if (doReturn) {
 				blockOps$any$cleanup(ir)

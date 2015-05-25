@@ -14,6 +14,7 @@ source("../R/compile.R")
 source("../R/typelib.R")
 source("../R/inferType.R")
 source("../R/createIR.R")
+source("../R/visitStackMachine2.R")
 
 #debug(inferType2)
 llvmFunc=byte2llvm(myfunction2)

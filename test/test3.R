@@ -2,6 +2,7 @@
 source("../R/compile.R")
 source("../R/inferType.R")
 source("../R/createIR.R")
+source("../R/visitStackMachine2.R")
 
 myfunction2 <-function(a) {
 	qq=if (a>2) {

@@ -347,13 +347,13 @@ inferFunctionType = function(context, funcSignature=NULL, forcedReturnType=NULL)
 		} else {
 			if (length(funcSignature$named) >0) {
 				if (is.null(funcSignature$named[[argList[i]]])) {
-					arg$returnType=getType(name=tpMissing,vector=FALSE)
+					arg$returnType=getType(name=tpMissing)
 				} else {
 					arg$returnType=funcSignature$named[[argList[i]]]
 				}
 			} else {
 				if (is.null(funcSignature$pos[i][[1]])) {
-					arg$returnType=getType(name=tpMissing,vector=FALSE)
+					arg$returnType=getType(name=tpMissing)
 				} else {
 					arg$returnType=funcSignature$pos[[i]]
 				}
@@ -400,8 +400,6 @@ inferFunctionType = function(context, funcSignature=NULL, forcedReturnType=NULL)
 		for (i in 1:length(blockList)) {
 		
 			vars2=as.ref(vars)
-			changed=FALSE
-			changed2=as.ref(changed)
 
 			initStack=list(stackOnExit=list(),stackPos=0)
 			tpInit=list()
@@ -412,20 +410,25 @@ inferFunctionType = function(context, funcSignature=NULL, forcedReturnType=NULL)
 				for (j in blockList[[i]]$deps) {
 					#browser()
 					if (! is.na(initStackList[j]	)) {
+						#browser()
 						# the initial stack is positioned at negative position of typeinformation array
 						if (initStack$stackPos == 0) {
 							initStack=initStackList[[j]]
-							initStack$insStart = initStack$stackPos
+							
 							for (k in (1:initStack$stackPos)) {
-								tpInit[[k]]=blockList[[j]]$typeInformation[[initStack$stackOnExit[[k]]]]
+								tpInit[k]=blockList[[j]]$typeInformation[[initStack$stackOnExit[[k]]-initStackList[[j]]$insStart]]
 								initStack$stackOnExit[[k]]=k
 							}
+							initStack$insStart = initStack$stackPos
 						} else if  (initStack$stackPos != initStackList[[j]]$stackPos ){
 							stop("initStack length differs between deps!")
 						} else {
 							for (k in (1:initStack$stackPos)) {
-								tpInit[[k]]=higherType(tpInit[[k]],
-									blockList[[j]]$typeInformation[[initStackList[[j]]$stackOnExit[[k]]]])
+								tpInit[k]=higherType(tpInit[[k]],
+									blockList[[j]]$typeInformation[[
+										initStackList[[j]]$stackOnExit[[k]]-initStackList[[j]]$insStart
+									]]
+								)
 							}
 						}
 					}
@@ -440,17 +443,22 @@ inferFunctionType = function(context, funcSignature=NULL, forcedReturnType=NULL)
 			}
 			#browser()
 			
-			typeInformation2=as.ref(typeInformation)
-			myInferType<-function(op,insNo,insList,insNo2,args2) {
-				inferType2(op,insNo,insList,insNo2,args2,vars2,constants,typeInformation2,changed2)
-			}
+			tm=getInferTypeManager(typeInformation, vars)
+			#typeInformation2=as.ref(typeInformation)
+			#myInferType<-function(op,insNo,insList,insNo2,args2) {
+			#	inferType2(op,insNo,insList,insNo2,args2,vars2,constants,typeInformation2,changed2)
+			#}
 
 
 
 
 			#browser()
-			initStackList[[i]]=visitStackMachine(source[blockList[[i]]$start:blockList[[i]]$end],myInferType,initStack)
+			initStackList[[i]]=visitStackMachine2(source[blockList[[i]]$start:blockList[[i]]$end],constants,tm,initStack)
 			#browser()
+
+			typeInformation=tm$environ$typeArray
+			vars=tm$environ$vars
+			changed=tm$environ$changed
 
 			#if there are information concerning neededTypes in the supplied initStack
 			#these must be propagated to the initStack providers
@@ -471,18 +479,13 @@ inferFunctionType = function(context, funcSignature=NULL, forcedReturnType=NULL)
 					
 						currentInitStack=initStackList[[j]]
 						#browser()
-						blockList[[j]]$typeInformation[[initStackList[[j]]$stackOnExit[[k]]]]=
-							tpSetNeededType(
-								blockList[[j]]$typeInformation[[initStackList[[j]]$stackOnExit[[k]]]],
-								if (is.null(blockList[[j]]$typeInformation[[initStackList[[j]]$stackOnExit[[k]]]])) {
-									typeInformation[[k]]
-								} else {						
-									higherType(
-										typeInformation[[k]],
-										tpGetNeededType(blockList[[j]]$typeInformation[[initStackList[[j]]$stackOnExit[[k]]]])
-									)
-								}
-							)
+						tmp3=initStackList[[j]]$stackOnExit[[k]]-initStackList[[j]]$insStart
+						tmp2=blockList[[j]]$typeInformation[[tmp3]]
+
+						tmp=tpSetNeededType(tmp2,higherType(typeInformation[[k]], tmp2))
+
+
+						blockList[[j]]$typeInformation[[tmp3]]=tmp
 
 					}
 				}
