@@ -29,12 +29,16 @@ r_module = setRefClass("r_module",
 			Rf_duplicate =  "GlobalVariable",
 			Rf_eval = "GlobalVariable",
 			Rf_install = "GlobalVariable",
+			Rf_mkString = "GlobalVariable",
+
+			Rf_lang1 = "GlobalVariable",
+			Rf_lang2 = "GlobalVariable",
 			Rf_lang3 = "GlobalVariable",
+			Rf_lang4 = "GlobalVariable",
 			Rf_findVar = "GlobalVariable",
 
-			string_eq = "GlobalVariable",
-			string_c = "GlobalVariable",
-			string_subset2 = "GlobalVariable"
+			SET_TAG = "GlobalVariable"
+
             ),
 	methods = list(
 		initialize = function(modName) {
@@ -91,16 +95,18 @@ r_module = setRefClass("r_module",
 			llvmAddSymbol(Rf_installSym) # $address)
 			Rf_install <<- createGlobalVariable("Rf_install", mod, Rf_installType)	
 
-			#Resolve lang3
-			Rf_lang3 <<- r_installFunctionSymbol("Rf_lang3",functionType(SEXPType,c(SEXPType,SEXPType,SEXPType),0))
+			#Resolve lang3*
+			Rf_lang1 <<- r_installFunctionSymbol("Rf_lang1",functionType(SEXPType,c(SEXPType),0))
+			Rf_lang2 <<- r_installFunctionSymbol("Rf_lang2",functionType(SEXPType,c(SEXPType, SEXPType),0))
+			Rf_lang3 <<- r_installFunctionSymbol("Rf_lang3",functionType(SEXPType,c(SEXPType, SEXPType, SEXPType),0))
+			Rf_lang4 <<- r_installFunctionSymbol("Rf_lang4",functionType(SEXPType,c(SEXPType, SEXPType, SEXPType, SEXPType),0))
 
 			R_GlobalEnv <<- r_installFunctionSymbol("R_GlobalEnv", SEXPType)
 			Rf_findVar <<- r_installFunctionSymbol("Rf_findVar", functionType(SEXPType,c(SEXPType,SEXPType),0))
 
-			#set strings for install
-			string_eq <<- createGlobalVariable("string_eq", mod, val="==")
-			string_c <<- createGlobalVariable("string_c", mod, val="c")	
-			string_subset2 <<- createGlobalVariable("string_subset2", mod, val="[[")	
+			Rf_mkString <<- r_installFunctionSymbol("Rf_mkString",functionType(SEXPType,c(StringType),0))
+
+			SET_TAG <<- r_installFunctionSymbol("SET_TAG",functionType(VoidType,c(SEXPType,SEXPType),0))
 
           },
 
@@ -121,41 +127,51 @@ r_module = setRefClass("r_module",
 		},
 
 
-		r_lang3=function(builder, op1, op2, op3) {
-			createCall(builder,Rf_lang3, op1, op2, op3)
+		r_call=function(builder,func,...) {
+			#browser()
+			args=list(...)
+			func2=r_install(builder, func)
+			args=c(builder,get(paste(sep="","Rf_lang",length(args)+1)), func2, args)
+			call=do.call(createCall,args)
+			r_protect(builder, call)
+		
+			return(call)
+		},
+
+		r_call_eval=function(builder,func,...) {
+			call=r_call(builder,func,...)
+			res=r_eval(builder,call)
+			return(res)
 		},
 
 
 		r_install=function(builder, op) {
 			op2=createGEP(builder,op,c(createConstant(builder,0L),createConstant(builder,0L)))
-			createCall(builder,Rf_install, op2)
-		#	r_globalenv=createLoad(builder,.Object@R_GlobalEnv)
-		#	createCall(builder,.Object@Rf_findVar, tmp, r_globalenv)
+			r_protect(builder, createCall(builder,Rf_install, op2))
+
+		},
+
+		r_mkString=function(builder, op) {
+			op2=createGEP(builder,op,c(createConstant(builder,0L),createConstant(builder,0L)))
+			r_protect(builder, createCall(builder,Rf_mkString, op2))
+
 		},
 
 
 		r_eval=function(builder, op) {
 			r_globalenv=createLoad(builder,R_GlobalEnv)
-			createCall(builder,Rf_eval, op, r_globalenv)
+			r_protect(builder,createCall(builder,Rf_eval, op, r_globalenv))
 		},
 
-
-		#funcrion for comparing two SEXPs
-		r_comp_eq=function(builder, opLeft, opRight) {
-			eqSymbol=r_protect(builder, r_install(builder, string_eq))
-			tmp=r_protect(builder, r_lang3(builder, eqSymbol, opLeft, opRight))
-			tmp2=r_eval(builder, tmp)
-			r_protect(builder, tmp2)
-			tmp2
+		r_findVar=function(builder, name, env= R_GlobalEnv) {
+			name2=r_install(builder, name)
+			r_env=createLoad(builder, env)
+			r_protect(builder, createCall(builder,Rf_findVar, name2, r_env))
 		},
 
-		#funcrion for subset2 [[ SEXPs
-		r_subset2=function(builder, vector, element) {
-			subset2Symbol=r_protect(builder, r_install(builder, string_subset2))
-			tmp=r_protect(builder, r_lang3(builder, subset2Symbol, vector, element))
-			tmp2=r_eval(builder, tmp)
-			r_protect(builder, tmp2)
-			tmp2
+		r_set_tag = function(builder, var, tag) {
+			createCall(builder,SET_TAG, var, tag)
 		}
+
 	)
 )

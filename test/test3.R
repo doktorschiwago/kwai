@@ -1,7 +1,10 @@
 
+
+library(kwai)
+
 source("../R/compile.R")
 source("../R/inferType.R")
-source("../R/createIR.R")
+source("../R/createIR2.R")
 source("../R/visitStackMachine2.R")
 
 myfunction2 <-function(a) {
@@ -14,7 +17,7 @@ myfunction2 <-function(a) {
 }
 
 
-library(kwai)
+
 
 #debug(inferType2)
 llvmFunc=byte2llvm(myfunction2)

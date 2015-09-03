@@ -2,7 +2,7 @@
 
 library(kwai)
 
-
+source("../R/discoverBlocks.R")
 
 myfunction <- function(arg1,arg2){
 	qq=arg1+1

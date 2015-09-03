@@ -8,6 +8,8 @@ source("../R/inferType.R")
 source("../R/createIR.R")
 source("../R/typelib.R")
 source("../R/llvm_helper.R")
+source("../R/discoverBlocks.R")
+source("../R/visitStackMachine3.R")
 
 myfunction <- function(arg1,arg2){
 	qq=arg1+1

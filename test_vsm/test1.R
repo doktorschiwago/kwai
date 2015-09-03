@@ -3,7 +3,7 @@
 library(kwai)
 
 
-source("../R/visitStackMachine2.R")
+source("../R/visitStackMachine3.R")
 
 myfunction <- function(arg1,arg2){
 	qq=arg1+arg2
@@ -35,9 +35,9 @@ for (op in Opcodes) {
 	environment(vsmHandler[[op$op]])=env
 }
 
-visitStackMachine2(
+source=renderStackMachine(
 	source=da_source[2][[1]][-1],
-	constants=da_source[3][[1]][-1],
-	vsmHandler=vsmHandler)
+	constants=da_source[3][[1]])
 
-
+#browser()
+visitStackMachine3(source,vsmHandler)
