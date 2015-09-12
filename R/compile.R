@@ -197,7 +197,7 @@ inferFunctionType = function(context, funcSignature=NULL, forcedReturnType=NULL)
 			arg$pos=i
 
 			#print(argList[i])
-			browser()
+			#browser()
 			args[[arg$name]]=arg
 
 			#browser()
@@ -214,14 +214,15 @@ inferFunctionType = function(context, funcSignature=NULL, forcedReturnType=NULL)
 
 	#browser()
 
-	funs=list()
+	symbols=list()
+	strings=list()
 
 	for (i in 1:length(blockList)) {
-		vm=createVarHandler(vars,funs, list())
+		vm=createVarHandler(vars, strings, symbols)
 		visitStackMachine3(blockList[[i]]$opTable,vm, "none")
 		vars=environment(vm$SETVAR.OP)$vars
-		funs=environment(vm$SETVAR.OP)$funs
-		strings=environment(vm$SETVAR.OP)$argNames
+		symbols=environment(vm$GETFUN.OP)$symbols
+		strings=environment(vm$SETVAR.OP)$strings
 	}
 
 	#browser()
@@ -231,7 +232,7 @@ inferFunctionType = function(context, funcSignature=NULL, forcedReturnType=NULL)
 	res$llvmSignature=llvmSignature
 	res$returnType=getType(name=tpAny)
 	res$vars=vars
-	res$funs=funs
+	res$symbols=symbols
 	res$strings=strings
 	#res$blockList=blockList
 	return(res)
@@ -279,7 +280,6 @@ compile2llvm = function(context, llvmContext) {
 	returnType=context$returnType
 	func=context$func
 	blockList=context$blockList
-	vars=context$vars
 	source=context$source
 	constants=context$constants
 	
@@ -293,7 +293,7 @@ compile2llvm = function(context, llvmContext) {
 	funs=context$funs
 
 
-	globalVarList=createVarList(r_helper$mod,vars, funs, context$strings)
+	globalVarList=createVarList(r_helper,context$vars, context$symbols, context$strings)
 
 	debugSignature=list()
 
@@ -421,7 +421,10 @@ compile2llvm = function(context, llvmContext) {
 		}
 	}
 
-	return(fun)
+	context$fun=fun
+	context$initFun=globalVarList$FUN
+
+	return(context)
 }
 
 makeRFunction2 =
@@ -432,7 +435,7 @@ makeRFunction2 =
 function(func, .ee = ExecutionEngine(as(func, "Module")))
 {
 
-	browser()
+	#browser()
   params = getParameters(func)
   i = is.na(params@names) | params@names == ""
   if(any(i))
@@ -443,7 +446,7 @@ function(func, .ee = ExecutionEngine(as(func, "Module")))
   
   f = function() {}
 
-	if (length(params$names) > 0) {
+	if (length(params) > 0) {
   		formals(f) = parms
   		formals(f)[["..."]] = parms[[1]]
 	}
@@ -453,7 +456,7 @@ function(func, .ee = ExecutionEngine(as(func, "Module")))
   e = quote(.args <- a)
   al = quote(.Call())
 	al[[2]] = ptr
-	if (length(params$names) > 0) {
+	if (length(params) > 0) {
   		for(i in 1:length(params@names))
      		al[[2 + i]] = as.name(params@names[i])
 	}
@@ -468,10 +471,11 @@ function(func, .ee = ExecutionEngine(as(func, "Module")))
   f
 }
 
-finishCompilation <- function(fun, llvmContext, llvmSignature) {	
+finishCompilation <- function(ctxt,llvmContext, llvmSignature) {	
 	
 	mod=llvmContext$mod
-	setOpFun=llvmContext$setOpFun
+	initFun=ctxt$initFun
+	fun=ctxt$fun
 	setOpFunArgTypes=llvmContext$setOpFunArgTypes
 	debugBuilder=llvmContext$debugBuilder
 
@@ -487,9 +491,16 @@ finishCompilation <- function(fun, llvmContext, llvmSignature) {
 	engine=ExecutionEngine(mod, useMCJIT=TRUE)
 	finalizeEngine(engine)
 	
-	
+	initFun2<-makeRFunction2(initFun,.ee=engine)	
 
 	res<-makeRFunction2(fun,.ee=engine)
+
+	#browser()
+
+	llvmEnv=initFun2()
+	attr(res,"llvmEnv")=llvmEnv
+	
+	
 	#browser()
 
 	print("finish compilation")
@@ -507,7 +518,7 @@ byte2llvm = function(func) {
 	ctxt=inferFunctionType(context=ctxt,forcedReturnType=getType(name=tpAny))
 
 	llvmContext=initLlvmContext(funcName, ctxt$absPath)
-	llvmFun=compile2llvm(ctxt,llvmContext)
-	res=finishCompilation(llvmFun,llvmContext, ctxt$llvmSignature)
+	ctxt2=compile2llvm(ctxt,llvmContext)
+	res=finishCompilation(ctxt2,llvmContext, ctxt$llvmSignature)
 	return(res)
 }

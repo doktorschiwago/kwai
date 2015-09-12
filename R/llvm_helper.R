@@ -12,6 +12,10 @@
 #}
 
 
+#in general all calls should have no impacy on the protecion stack. all calls to protec must be matches to a call to unprotect. The
+#result should be returned unprotected
+
+
 r_module = setRefClass("r_module",
     # Define the slots
     fields = list(
@@ -37,7 +41,8 @@ r_module = setRefClass("r_module",
 			Rf_lang4 = "GlobalVariable",
 			Rf_findVar = "GlobalVariable",
 
-			SET_TAG = "GlobalVariable"
+			SET_TAG = "GlobalVariable",
+			SET_VECTOR_ELT= "GlobalVariable"
 
             ),
 	methods = list(
@@ -107,6 +112,7 @@ r_module = setRefClass("r_module",
 			Rf_mkString <<- r_installFunctionSymbol("Rf_mkString",functionType(SEXPType,c(StringType),0))
 
 			SET_TAG <<- r_installFunctionSymbol("SET_TAG",functionType(VoidType,c(SEXPType,SEXPType),0))
+			SET_VECTOR_ELT <<- r_installFunctionSymbol("SET_VECTOR_ELT",functionType(SEXPType,c(SEXPType, Int32Type, SEXPType),0))
 
           },
 
@@ -130,47 +136,57 @@ r_module = setRefClass("r_module",
 		r_call=function(builder,func,...) {
 			#browser()
 			args=list(...)
-			func2=r_install(builder, func)
-			args=c(builder,get(paste(sep="","Rf_lang",length(args)+1)), func2, args)
-			call=do.call(createCall,args)
-			r_protect(builder, call)
+			args2=c(builder,get(paste(sep="","Rf_lang",length(args)+1)), func, args)
+
+			if (length(args)+3 != length(args2)) {
+				stop("error!@")
+			}
+			call=do.call(createCall,args2)
+			#r_protect(builder, call)
 		
 			return(call)
 		},
 
 		r_call_eval=function(builder,func,...) {
 			call=r_call(builder,func,...)
+			r_protect(builder,call)
 			res=r_eval(builder,call)
+			r_unprotect(builder,1)
 			return(res)
 		},
 
 
 		r_install=function(builder, op) {
 			op2=createGEP(builder,op,c(createConstant(builder,0L),createConstant(builder,0L)))
-			r_protect(builder, createCall(builder,Rf_install, op2))
+			createCall(builder,Rf_install, op2)
 
 		},
 
 		r_mkString=function(builder, op) {
 			op2=createGEP(builder,op,c(createConstant(builder,0L),createConstant(builder,0L)))
-			r_protect(builder, createCall(builder,Rf_mkString, op2))
+			createCall(builder,Rf_mkString, op2)
 
 		},
 
 
 		r_eval=function(builder, op) {
 			r_globalenv=createLoad(builder,R_GlobalEnv)
-			r_protect(builder,createCall(builder,Rf_eval, op, r_globalenv))
+			createCall(builder,Rf_eval, op, r_globalenv)
 		},
 
-		r_findVar=function(builder, name, env= R_GlobalEnv) {
-			name2=r_install(builder, name)
+		r_findVar=function(builder, name, env= R_GlobalEnv) {			
 			r_env=createLoad(builder, env)
-			r_protect(builder, createCall(builder,Rf_findVar, name2, r_env))
+			res=createCall(builder,Rf_findVar, name, r_env)
+			#r_unprotect(builder, 1)
+			return(res)
 		},
 
 		r_set_tag = function(builder, var, tag) {
 			createCall(builder,SET_TAG, var, tag)
+		},	  	
+
+		r_set_vector_elt = function(builder, list, pos, element) {
+			createCall(builder,SET_VECTOR_ELT, list, createConstant(builder,as.integer(pos)), element)
 		}
 
 	)

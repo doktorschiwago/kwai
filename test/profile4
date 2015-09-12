@@ -1,0 +1,16 @@
+#!/usr/bin/expect
+spawn ./test15.sh
+
+sleep 30
+set no 100
+
+for {set i 1} {$i < $no} {incr i 1} {
+	send \003
+	expect "(gdb)" {send "bt\r"}
+	expect "(gdb)" {
+		send "c\r"
+		sleep 10
+	}
+	
+}
+
