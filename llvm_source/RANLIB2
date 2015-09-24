@@ -1,0 +1,3 @@
+#!/bin/sh
+echo "hello from dummy ranlib"
+echo "i do nothing!"

@@ -1,0 +1,20 @@
+#~/bin/sh
+
+BASEPATH=$(realpath ..)
+
+
+CC=$BASEPATH/CC2
+F77=$BASEPATH/f97
+AR=$BASEPATH/AR2
+RANLIB=$BASEPATH/RANLIB2
+
+export CC
+export F77
+export AR
+export RANLIB
+
+echo $CC
+
+
+
+./configure --disable-BLAS-shlib
