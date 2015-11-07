@@ -479,6 +479,12 @@ finishCompilation <- function(ctxt,llvmContext, llvmSignature) {
 	setOpFunArgTypes=llvmContext$setOpFunArgTypes
 	debugBuilder=llvmContext$debugBuilder
 
+
+	
+	finalizeDIBuilder(debugBuilder)
+	engine=ExecutionEngine(mod)
+	finalizeEngine(engine)
+
 	showModule(mod)
 	if (!verifyModule(mod)) {
 		print("juhu")
@@ -486,10 +492,6 @@ finishCompilation <- function(ctxt,llvmContext, llvmSignature) {
 		print("ohno")
 	}
 
-	
-	finalizeDIBuilder(debugBuilder)
-	engine=ExecutionEngine(mod, useMCJIT=TRUE)
-	finalizeEngine(engine)
 	
 	initFun2<-makeRFunction2(initFun,.ee=engine)	
 
