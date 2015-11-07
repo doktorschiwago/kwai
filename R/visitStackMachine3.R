@@ -14,7 +14,7 @@ OpcodeList = list(
 	list(
 		opcodes=c(
 			"ADD.OP", "SUB.OP", "MUL.OP", "DIV.OP", "EQ.OP", "NE.OP", "LT.OP", "LE.OP", "GE.OP", "GT.OP", "AND.OP", "AND2ND.OP", "OR.OP",
-			"EXPT.OP"),
+			"EXPT.OP", "COLON.OP"),
 		args=promiseList(
 			expression		= constantArgCode(1),
 			left_operand	= vmStack(-1),

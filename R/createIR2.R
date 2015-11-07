@@ -18,7 +18,8 @@ cirHandlerTemplate=list(
 			AND.OP="&&", 
 			AND2ND.OP="&&", 
 			OR.OP="||",
-			EXPT.OP="^"
+			EXPT.OP="^",
+			COLON.OP=":"
 		),
 		args=promiseList(
 			a1=left_operand,
