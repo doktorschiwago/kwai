@@ -3,6 +3,16 @@ echo >&2
 echo "AR2" >&2
 echo >&2
 
+#path of files
+#echo $0 >&2
+BASEPATH2=$(dirname "$0")
+#echo $BASEPATH2 >&2
+BASEPATH=$(realpath "$BASEPATH2")
+#echo $BASEPATH >&2
+
+#load LLVM Version Info
+. $BASEPATH/llvm_version.sh
+
 echo $@ >&2
 i=1
 for arg in $@
@@ -27,8 +37,8 @@ do
 done
 #echo llvm-ar $1 $2 $AR_LINE
 #llvm-ar $1 $2 $AR_LINE
-echo llvm-link -o $LIB_NAME $AR_LINE
-llvm-link -o $LIB_NAME $AR_LINE
+echo $LLVM_LINK -o $LIB_NAME $AR_LINE
+$LLVM_LINK -o $LIB_NAME $AR_LINE
 echo >&2
 echo "----------" >&2
 echo >&2

@@ -5,7 +5,17 @@ echo >&2
 
 CLANG_LINE=$@
 echo $CLANG_LINE >&2
-#check for -o
+
+#path of files
+#echo $0 >&2
+BASEPATH2=$(dirname "$0")
+#echo $BASEPATH2 >&2
+BASEPATH=$(realpath "$BASEPATH2")
+echo $BASEPATH >&2
+
+#load LLVM Version Info
+echo source $BASEPATH/llvm_version.sh >&2
+. $BASEPATH/llvm_version.sh
 
 COMPILE_TARGET=0
 # 1 generate object precessor of 11 and 14
@@ -17,7 +27,9 @@ COMPILE_TARGET=0
 OBJECT_NAME_IN_LINE=0
 COMPILE_TARGET=0
 
-while getopts ":o:I:L:gO:c:s:v:D:f:e:" opt; do
+COMPILE_ARGUMENTS=""
+
+while getopts ":o:I:L:gO:c:s:v:D:f:e:W:" opt; do
 	case $opt in
 	o)
 		#change -o to generate bitcode
@@ -37,6 +49,15 @@ while getopts ":o:I:L:gO:c:s:v:D:f:e:" opt; do
 		;;
 	c)
 		COMPILE_TARGET=11
+		;;
+	*)
+		echo $opt  >&2
+		COMPILE_ARGUMENTS=$COMPILE_ARGUMENTS" -"$opt
+		if [ -n $OPTARG ] ; then
+			echo $OPTARG  >&2
+			COMPILE_ARGUMENTS=$COMPILE_ARGUMENTS""$OPTARG
+		fi
+		;;
 	esac
 done 
 
@@ -51,8 +72,10 @@ if [ $COMPILE_TARGET -gt 0 ] ; then
 		LIB_PATH=""
 		LD_LINE=""
 		LINK_LINE=""
+		SOURCE_LINE=""
 		for arg in $@
 		do
+			echo $arg
 			IS_LINK_LIB=$(echo $arg | grep '^-[l]')
 			IS_LINK_PATH=$(echo $arg | grep '^-[L]')
 			IS_ARCHIVE_FILE=$(echo $arg | grep '\.a$')
@@ -63,6 +86,7 @@ if [ $COMPILE_TARGET -gt 0 ] ; then
 				LD_LINE=$LD_LINE" "$arg
 			elif [ $IS_LINK_LIB ] ; then
 				LD_LINE=$LD_LINE" "$arg
+				COMPILE_ARGUMENTS=$COMPILE_ARGUMENTS" "$arg
 			elif [ $IS_ARCHIVE_FILE ] ; then
 				LINK_LINE=$LINK_LINE" "$arg
 				COMPILE_TARGET=14
@@ -72,6 +96,7 @@ if [ $COMPILE_TARGET -gt 0 ] ; then
 				COMPILE_TARGET=14
 			elif [ $IS_SOURCE_FILE ] ; then
 				CLANG_LINE2=$CLANG_LINE2" "$arg
+				SOURCE_LINE=$SOURCE_LINE" "$arg
 				if [ -z $OBJECT_NAME ] ; then
 					OBJECT_NAME=$(echo $arg | cut -d'.' -f1)
 				fi
@@ -87,11 +112,37 @@ if [ $COMPILE_TARGET -gt 0 ] ; then
 
 	if [ $COMPILE_TARGET -eq 14 ] ; then
 		echo compile to executable $OBJECT_NAME >&2
+
+		if [ -n "$SOURCE_LINE" ] ; then
+			echo "compiling source to object: $SOURCE_LINE"
+			echo "$CLANG -o /tmp/tmp-$$.bc -emit-llvm $COMPILE_ARGUMENTS -c $SOURCE_LINE  >&2"
+			$CLANG -o /tmp/tmp-$$.bc -emit-llvm $COMPILE_ARGUMENTS -c $SOURCE_LINE  >&2
+			LINK_LINE=$LINK_LINE" /tmp/tmp-$$.bc"
+		fi
+
+
+		#adding dummy main for f2c to link list
+		$CLANG -o /tmp/tmp5-$$.bc -emit-llvm -c $BASEPATH/dummy_main.c  >&2
+		LINK_LINE=$LINK_LINE" /tmp/tmp5-$$.bc"
+
 		#echo clang -emit-llvm $CLANG_LINE >&2
 		#clang -S -emit-llvm $CLANG_LINE  >&2
 		#mv $OBJECT_NAME $OBJECT_NAME.linked.bc
-		echo llvm-link -v -o $OBJECT_NAME.linked.bc $LINK_LINE
-		llvm-link -v -o $OBJECT_NAME.linked.bc $LINK_LINE
+		echo $LLVM_LINK -v -o $OBJECT_NAME.linked.bc $LINK_LINE >&2
+		$LLVM_LINK -v -o $OBJECT_NAME.linked.bc $LINK_LINE >&2
+
+
+		#we use clang to check, wheteher the executable works
+		echo $CLANG -o /tmp/tmp2-$$   -lf2c $OBJECT_NAME.linked.bc $COMPILE_ARGUMENTS -lf2c
+		$CLANG -o /tmp/tmp2-$$   $OBJECT_NAME.linked.bc $COMPILE_ARGUMENTS -lf2c >&2
+		SUCCESS=$?
+
+		if [ $SUCCESS -ne 0 ] ; then
+			exit $SUCCESS
+		fi
+
+		rm /tmp/tmp2-$$ >&2
+
 
 		#tryin to figure out which libraries are needed
 		#echo llc -filetype=obj -o $OBJECT_NAME.linked.object $OBJECT_NAME.linked.bc
@@ -99,23 +150,34 @@ if [ $COMPILE_TARGET -gt 0 ] ; then
 		#echo ld -o $OBJECT_NAME.linked.bin $LD_LINE $OBJECT_NAME.linked.object 
 		#ld -o $OBJECT_NAME.linked.bin $LD_LINE $OBJECT_NAME.linked.object 
 		echo "#/bin/bash" > $OBJECT_NAME
-		echo "LD_PRELOAD=/lib/x86_64-linux-gnu/liblzma.so.5:/lib/x86_64-linux-gnu/libreadline.so.6:/lib/x86_64-linux-gnu/librt.so.1" >> $OBJECT_NAME
+		echo "LD_PRELOAD=/lib/x86_64-linux-gnu/liblzma.so.5:/lib/x86_64-linux-gnu/libreadline.so.6:/lib/x86_64-linux-gnu/librt.so.1:/usr/lib/libf2c.so.2" >> $OBJECT_NAME
 		echo "export LD_PRELOAD"  >> $OBJECT_NAME
-		echo "lli -use-mcjit -jit-emit-debug $(realpath $OBJECT_NAME.linked.bc)" >> $OBJECT_NAME
+		echo "$LLI $(realpath $OBJECT_NAME.linked.bc)" >> $OBJECT_NAME
 		chmod a+x $OBJECT_NAME
 
+		if [ -n "$SOURCE_LINE" ] ; then
+			rm /tmp/tmp-$$.bc
+		fi
+
+		#we use clang to check, wheteher the executable works
+		#clang -o /tmp/tmp2-$$  $COMPILE_ARGUMENTS $OBJECT_NAME.linked.bc  -Wl,-Bstatic -lf2c
+		echo $CLANG -o /tmp/tmp2-$$ $OBJECT_NAME.linked.bc $COMPILE_ARGUMENTS -Wl,-Bstatic -lf2c 
+		$CLANG -o /tmp/tmp2-$$   -lf2c $OBJECT_NAME.linked.bc $COMPILE_ARGUMENTS -lf2c
+		
+
+		exit $SUCCESS
 		
 	elif [ $COMPILE_TARGET -eq 13 ] ; then
 		echo compile to executable $OBJECT_NAME >&2
-		echo clang $CLANG_LINE >&2
-		clang $CLANG_LINE  >&2
+		echo $CLANG $CLANG_LINE >&2
+		$CLANG $CLANG_LINE  >&2
 	else
-		echo clang -emit-llvm $CLANG_LINE >&2
-		clang -emit-llvm $CLANG_LINE  >&2
+		echo $CLANG -emit-llvm $CLANG_LINE >&2
+		$CLANG -emit-llvm $CLANG_LINE  >&2
 	fi
 else
-	echo clang $CLANG_LINE >&2
-	clang $CLANG_LINE  >&2
+	echo $CLANG $CLANG_LINE >&2
+	$CLANG $CLANG_LINE  >&2
 fi
 
 echo >&2

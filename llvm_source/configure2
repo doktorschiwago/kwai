@@ -4,14 +4,14 @@ BASEPATH=$(realpath ..)
 
 
 CC=$BASEPATH/CC2
-F77=$BASEPATH/f97
+F77=$BASEPATH/fort77
 AR=$BASEPATH/AR2
 RANLIB=$BASEPATH/RANLIB2
 
 export CC
-export F77
 export AR
 export RANLIB
+export F77
 
 echo $CC
 
