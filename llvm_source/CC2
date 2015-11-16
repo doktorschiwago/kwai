@@ -50,6 +50,12 @@ while getopts ":o:I:L:gO:c:s:v:D:f:e:W:" opt; do
 	c)
 		COMPILE_TARGET=11
 		;;
+	O)
+		#we want no optimization
+		CLANG_LINE=$(echo "$CLANG_LINE" | sed -e 's/-O[1-2] //g')
+		echo "Optimizations removed!" >&2
+		echo $CLANG_LINE >&2
+		;;
 	*)
 		echo $opt  >&2
 		COMPILE_ARGUMENTS=$COMPILE_ARGUMENTS" -"$opt
