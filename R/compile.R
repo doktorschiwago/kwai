@@ -400,7 +400,7 @@ compile2llvm = function(context, llvmContext) {
 		}		
 	}
 
-	#Adding PHI Add Incoming for lower blocks
+	#Adding PHI Add Incoming for higher blocks
 
 	for (i in 1:length(blockList)) {
 		for (j in blockList[[i]]$deps) {

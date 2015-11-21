@@ -58,6 +58,7 @@ discoverBlocks2 <-function(opTable) {
 					}
 				}
 				if (! found) {
+					#browser()
 					blockDeps=block$deps
 					blockDeps[[length(blockDeps)+1]]=i
 					blockList[[branch]]$deps=blockDeps
@@ -77,15 +78,32 @@ discoverBlocks2 <-function(opTable) {
 				}
 				#browser()	
 				if (opTable[[i-1]]$fallthrough) {
-					blockDeps=blockList[i]$deps
+					#browser()
+					blockDeps=blockList[[i]]$deps
 					blockDeps[[length(blockDeps)+1]]=i-1
 					blockList[[i]]$deps=blockDeps
 				}
 			} else if (! is.null(blockList[i][[1]])) {
 				#so theres a new block, but no branch 
-				blockDeps=blockList[[i]]$deps
-				blockDeps[[length(blockDeps)+1]]=i-1
-				blockList[[i]]$deps=blockDeps
+				#check whether we must add sth here
+				#browser()
+
+				found=FALSE
+				if (length(block$deps)>0) {
+					for (j in 1:length(block$deps)) {
+						if (block$deps[[j]]==(i-1)) {
+							found=TRUE
+							break
+						}
+					}
+				}
+				if (! found) {
+					#browser()
+					blockDeps=block$deps
+					blockDeps[[length(blockDeps)+1]]=i-1
+					blockList[[branch]]$deps=blockDeps
+				}
+
 			}
 		}
 	}
