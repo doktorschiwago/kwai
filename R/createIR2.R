@@ -460,8 +460,9 @@ createCIRHandler <- function(handlerStuff, globalVarList, parameters, mod, irb, 
 		
 		#creating debug information
 		#browser()
-		if (! is.null(args[["expression"]])) {
-			expression=args[["expression"]]
+		if (! (is.null(args[["expression"]]) || is.na(args[["expression"]]))) {
+			browser()
+			expression=args$expression$expression
 			debugSetLocation(irb, debugFunction, attr(expression,"srcref")[1], attr(expression,"srcref")[5])
 		}
 
