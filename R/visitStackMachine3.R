@@ -572,7 +572,18 @@ isStackArg=function(funcName) {
 }
 
 #this function calls the vsmHandler for each instruction in opTable
-#stack arguments are resolved
+#
+#vsm handler must be a list with one entry for each support OP
+#	this function is called with the following parameters
+#	opNumber = Number of the op in the opTable
+#	opName = Name of the OP
+#	deltaStack = the effect this OP has on the stack
+#	resStackPos = at which position of the stack will the result of this call be saved
+#	assignsStack = will the result of this call be saved on the stack
+#	argTypes = a list of the the type of each argument to this function
+#	and in addition all arguments of this OP
+
+
 
 visitStackMachine3 <- function(opTable, vsmHandler, initStack=NULL, callHandlerForStackOp=TRUE) {
 
