@@ -350,21 +350,27 @@ createCIRHandler <- function(handlerStuff, globalVarList, parameters, mod, irb, 
 	handler$LDCONST.OP<-function(value, ...) {
 		#browser()
 		if (length(value) != 1) {
-			stop("can handel on length=1")
-		} else if (typeof(value) != "double") {
-			stop("can handle only double!")
+			stop("can handle only length==1")
+		} else if (typeof(value) == "double") {
+			value2=makeConstant(irb,as.double(value))
+			newVector=mod$r_allocVector(irb, 14, 1)
+			mod$r_protect(irb, newVector)
+
+			newVector3=createBitCast(irb, newVector,pointerType(DoubleType))
+			data=createGEP(irb,newVector3,c(createConstant(irb,5L)))
+			createStore(irb,value2,data)
+			mod$r_unprotect(irb, 1)
+		} else if (typeof(value) == "character") {
+			#browser()
+			newVector=createLoad(irb,handlerStuff$globalStringList[[value]])
+		} else {
+			stop(paste("can handle only double!", typeof(value), "is not supported!"))
 		}
 
 		
-		value2=makeConstant(irb,as.double(value))
-		newVector=createCall(irb,mod$Rf_allocVector,createConstant(irb,14L),createConstant(irb,1L))
-		mod$r_protect(irb, newVector)
 
-		newVector3=createBitCast(irb, newVector,pointerType(DoubleType))
-		data=createGEP(irb,newVector3,c(createConstant(irb,5L)))
-		createStore(irb,value2,data)
 
-		mod$r_unprotect(irb, 1)
+		
 		newVector
 	}
 
@@ -511,6 +517,23 @@ createVarHandler=function(vars2, strings2, symbols2) {
 		strings<<-strings2
 	}
 	environment(handler$GETVAR.OP)$strings=strings2
+
+	handler$LDCONST.OP = function(value, ...) {
+		if (typeof(value) != "character") {
+			return()
+		}
+
+		#browser()
+		strings2=strings
+	
+		for (val in value) {
+			if (is.null(strings2[[val]])) {
+					strings2[[val]]=val
+			}
+		}
+		strings<<-strings2
+	}
+	environment(handler$LDCONST.OP)$strings=strings2
 
 	return(handler)
 }
