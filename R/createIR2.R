@@ -39,7 +39,9 @@ cirHandlerTemplate=list(
 )
 
 
-createVarList <- function(mod, arguments, symbols, strings) {
+createVarList <- function(mod, arguments, symbols, strings, rType) {
+
+	#browser()
 
 	globalVarList=list()
 
@@ -72,7 +74,7 @@ createVarList <- function(mod, arguments, symbols, strings) {
 
 	for (varName in names(symbols)) {
 		if (is.null(globalVarList$STRINGS[symbols[[varName]]][[1]])) {
-			globalVarList$STRINGS[[varName]]=createGlobalVariable(paste(sep="","string_",varName), mod$mod, val=symbols[[varName]])
+			globalVarList$STRINGS[[symbols[[varName]]]]=createGlobalVariable(paste(sep="","string_",varName), mod$mod, val=symbols[[varName]])
 		}
 	}
 
@@ -93,14 +95,14 @@ createVarList <- function(mod, arguments, symbols, strings) {
 
 	#browser()
 
-	initFun = Function("__init", SEXPType, list(), mod$mod)
+	initFun = Function("__init", rType, list(), mod$mod)
 	initBlock=Block(initFun)
 	initBuilder=IRBuilder(initBlock)
 
 	#creatin symbols once, not on every usage
 	for (name in names(symbols)) {
 		if (is.null(globalSymbolList[name][[1]])) {
-			name2=mod$r_install(initBuilder, globalVarList$STRINGS[[name]])
+			name2=mod$r_install(initBuilder, globalVarList$STRINGS[[symbols[[name]]]])
 			mod$r_protect(initBuilder, name2)
 			
 			cntProtected=cntProtected+1
@@ -145,8 +147,8 @@ createVarList <- function(mod, arguments, symbols, strings) {
 
 	#creatin symbols once, not on every usage
 	for (name in names(globalSymbolList)) {
-		name2_var=createGlobalVariable(paste(sep="_","symbol",name), mod$mod, type=SEXPType,linkage=PrivateLinkage)
-		setInitializer(name2_var,getNULLPointer(SEXPType))
+		name2_var=createGlobalVariable(paste(sep="_","symbol",name), mod$mod, type=rType,linkage=PrivateLinkage)
+		setInitializer(name2_var,getNULLPointer(rType))
 			
 		#name2_ptr=createGEP(irb,globalSymbolList[[name]],c(createConstant(irb,0L)))
 		createStore(initBuilder, globalSymbolList[[name]], name2_var)
@@ -156,8 +158,8 @@ createVarList <- function(mod, arguments, symbols, strings) {
 
 	for (name in names(globalStringList)) {
 
-		name2_var=createGlobalVariable(paste(sep="_","Rstring",name), mod$mod, type=SEXPType,linkage=PrivateLinkage)
-		setInitializer(name2_var,getNULLPointer(SEXPType))
+		name2_var=createGlobalVariable(paste(sep="_","Rstring",name), mod$mod, type=rType,linkage=PrivateLinkage)
+		setInitializer(name2_var,getNULLPointer(rType))
 			
 		createStore(initBuilder, globalStringList[[name]], name2_var)
 
@@ -183,8 +185,9 @@ createVarList <- function(mod, arguments, symbols, strings) {
 
 
 initCIRHandler <- function(mod, globalVarList, parameters, debugBuilder, debugFun, debugCompUnit, irb, line,
-	rType2LlvmDebug) {
+	rType2LlvmDebug, nativeModule=NULL) {
 
+	useNative=! is.null(nativeModule)
 
 	globalStringList=globalVarList$STRINGLIST
 	globalSymbolList=globalVarList$SYMBOLLIST
@@ -205,7 +208,7 @@ initCIRHandler <- function(mod, globalVarList, parameters, debugBuilder, debugFu
 
 	#FIXME
 	#stack size should be calculated not fixed!
-	stackList=createCall(irb,mod$Rf_allocVector,createConstant(irb,19L),createConstant(irb,100L))
+	stackList=mod$r_allocVector(irb,19,100)
 	mod$r_protect(irb, stackList)
 	
 
@@ -236,7 +239,84 @@ initCIRHandler <- function(mod, globalVarList, parameters, debugBuilder, debugFu
 	}
 
 
+	if (useNative) {
+		handlerStuff$nativeModule=nativeModule
 
+
+		#browser()
+
+		hex2int64 = function(hex) {
+			#browser()
+			res=as.integer64(0)
+			if (nchar(hex)>6) {
+				res=hex2int64(substr(hex,0,nchar(hex)-6))*(256**3)
+				hex=substr(hex,nchar(hex)-5, stop=nchar(hex))
+			}
+			res=res+as.integer64(strtoi(hex, base=16L))
+		}
+
+		symbolTable=readRDS("symbolTable.raw")
+
+		refSymbol="Rf_protect"
+		refAddress=hex2int64(substr(getSymbol(refSymbol),3,20))
+		print(substr(getSymbol(refSymbol),3,20))
+		print(refAddress)
+
+		refOffset=refAddress-hex2int64(symbolTable[[refSymbol]])
+		print(symbolTable[[refSymbol]])
+		print(refOffset)
+		#browser()
+
+		#loop over all global variable
+		globalList=c(getGlobalVariables(handlerStuff$nativeModule), getModuleFunctions(handlerStuff$nativeModule))
+
+		handlerStuff$nativeAdresses=list()
+		handlerStuff$nativeFunctions=list()
+
+		funcList=getModuleFunctions(handlerStuff$nativeModule)
+
+		for (global in names(globalList)) {
+
+			#browser()
+	
+	
+			#check if global is resolvable
+			linkage=getLinkage(globalList[[global]])
+
+			if (linkage == InternalLinkage) next
+			if (global == "llvm.dbg.declare") next
+
+			#retrieve debug address
+
+			globalAddress=symbolTable[[global]]
+			print(paste("Symbol:", global, "at",globalAddress))
+
+			if (! is.null(globalAddress)) {
+				globalAddress2=hex2int64(globalAddress)+refOffset
+
+				handlerStuff$nativeAdresses[[global]]=as.character(globalAddress2)
+
+			} else if (substr(global,0,3) == "op_" ){
+				#browser()
+				if (is.null(handlerStuff$nativeFunctions[[substr(global,4,99)]])) {
+					handlerStuff$nativeFunctions[[substr(global,4,99)]]=funcList[[global]]
+				}
+			} else if (substr(global,0,4) == "op2_" ){
+				#browser()
+				handlerStuff$nativeFunctions[[substr(global,5,99)]]=funcList[[global]]
+			} else {
+				print(paste("unknown function:",global))
+			}
+	
+			#print(globalAddress)
+		}
+
+		#browser()
+		
+	} else {
+		handlerStuff$nativeFunctions=list()
+	}
+	
 
 
 	handlerStuff$funcEnv=funcEnv
@@ -275,16 +355,25 @@ createCIRHandler <- function(handlerStuff, globalVarList, parameters, mod, irb, 
 			argList[[i]]=eval(opGroup$args[[i]], envir=args)
 		}
 
+		#browser()
 		if (makeProm) {
 			res=do.call(mod$r_call,c(irb, createLoad(irb, globalSymbolList[[opName]]), argList))
 
 			#createStore(irb, binOp(irb, Add, createLoad(irb, cntProtected), 2L), cntProtected)
-		} else {
+		} else if (is.null(handlerStuff$nativeFunctions[[substr(opName, 0, nchar(opName)-3)]])) {
 			res=do.call(mod$r_call_eval,c(irb, createLoad(irb, globalSymbolList[[opName]]), argList))
 
 			#createStore(irb, binOp(irb, Add, createLoad(irb, cntProtected), 3L), cntProtected)
-		}
+		} else {
+			#browser()
 
+			nativeFunc=handlerStuff$nativeFunctions[[substr(opName, 0, nchar(opName)-3)]]
+			if (! is.null(getParameters(nativeFunc)[["constant"]])) {
+				argList=c(argList,createLoad(irb,mod$R_NilValue))
+			}
+			res=do.call(createCall, c(irb, handlerStuff$nativeFunctions[[substr(opName, 0, nchar(opName)-3)]], 
+				createLoad(irb, mod$R_GlobalEnv), argList))
+		}
 		return(res)
 	}
 
@@ -332,6 +421,7 @@ createCIRHandler <- function(handlerStuff, globalVarList, parameters, mod, irb, 
 			#mod$r_unprotect(irb, 3)
 		} else {
 			res=mod$r_call_eval(irb, SUBSET_GET,funcEnv,varName2)
+			res=createCall(irb,mod$Rf_duplicate,res)
 			#mod$r_unprotect(irb, 4)
 		}
 		return(res)
@@ -402,9 +492,9 @@ createCIRHandler <- function(handlerStuff, globalVarList, parameters, mod, irb, 
 #		return(NA)
 #	}
 #
-#	handler$DUP2ND.OP<-function(top, secondTop,...) {
-#		return(secondTop)
-#	}
+	handler$DUP2ND.OP<-function(top, secondTop,...) {
+		return(createCall(irb,mod$Rf_duplicate,secondTop))
+	}
 
 	handler$GETFUN.OP<-function(funName, ...) {
 		res=mod$r_findVar(irb, createLoad(irb, handlerStuff$globalSymbolList[[funName]]))
@@ -452,6 +542,7 @@ createCIRHandler <- function(handlerStuff, globalVarList, parameters, mod, irb, 
 		return(createLoad(irb,mod$R_NilValue))
 	}
 
+
 	#this function takes care of some common tasks
 	wrapperHandler<-function(...) {
 		args=list(...)
@@ -461,7 +552,7 @@ createCIRHandler <- function(handlerStuff, globalVarList, parameters, mod, irb, 
 		#creating debug information
 		#browser()
 		if (! (is.null(args[["expression"]]) || is.na(args[["expression"]]))) {
-			browser()
+			#browser()
 			expression=args$expression$expression
 			debugSetLocation(irb, debugFunction, attr(expression,"srcref")[1], attr(expression,"srcref")[5])
 		}

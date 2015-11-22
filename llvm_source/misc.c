@@ -68,3 +68,13 @@ static R_INLINE SEXP GETSTACK_PTR_TAG(SEXP s)
 double R_POW(double x, double y) {
 	return R_pow(x, y);
 }
+
+SEXP op_DFLTSUBSET2(SEXP rho, SEXP stack0, SEXP stack1);
+
+SEXP op2_DFLTSUBSET2(SEXP rho, SEXP stack0, SEXP stack1) {
+	return op_DFLTSUBSET2(
+		rho, 
+		R_NilValue,
+		LCONS(stack0, LCONS(stack1, R_NilValue))
+    );
+}

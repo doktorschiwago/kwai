@@ -337,10 +337,4 @@ typesMatch = function(type1,type2) {
 	return(type1@name == type2@name && type1@vectorLength == type2@vectorLength)
 }
 
-rType2Llvm <- function(rType) {
-	switch(tpGetName(rType),
-		"numeric" = { DoubleType },
-		"any" = {SEXPType},
-		{stop(paste("Type",rType,"is unknown"))}
-	)
-}
+

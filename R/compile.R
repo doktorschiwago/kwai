@@ -96,6 +96,7 @@ attachLineInformation2 <- function(elements,lineNumbers,default) {
 }
 
 attachLineInformation <- function(func) {
+	#browser()
 	functionElements=body(func)
 	functionLineNumbers=attr(functionElements,"srcref")
 
@@ -118,7 +119,7 @@ is.compile <- function(func)
     any(grepl("bytecode:", last_2_lines)) # returns TRUE if it finds the text "bytecode:" in any of the last two lines of the function's print
 }
 
-initCompileContext <- function(func,funcName) {
+initCompileContext <- function(func,funcName, useNative=TRUE) {
 	#reading function Signature
 
 
@@ -143,12 +144,42 @@ initCompileContext <- function(func,funcName) {
 	
 	opList2=lowerOps(opList)
 
+	printBlock(opList2)
+
 	#browser()
 
 	blockList=discoverBlocks2(opList2)
 
+	if (useNative) {
+		#browser()
+		nativeModule=parseAssembly("~/unison/dev/kwai/llvm_source/complete.ll")
+
+		#nativeSEXP=getTypeInModule(nativeModule,"SEXPREC*")
+		nativeSEXP=getReturnType(getModuleFunctions(nativeModule)$op_ISNUMERIC)
+
+		if (is.null(nativeSEXP)) stop("native SEXP is null!")
+ 
+		rType2Llvm <- function(rType) {
+			switch(tpGetName(rType),
+				"numeric" = { DoubleType },
+				"any" = {nativeSEXP},
+				{stop(paste("Type",rType,"is unknown"))}
+			)
+		}
+	} else {
+		rType2Llvm <- function(rType) {
+			switch(tpGetName(rType),
+				"numeric" = { DoubleType },
+				"any" = {SEXPType},
+				{stop(paste("Type",rType,"is unknown"))}
+			)
+		}
+		nativeModule=NULL
+	}
+
 	res=list(blockList=blockList,argList=names(formals(func)),
-		absPath=absPath, func=func, funcName=funcName)
+		absPath=absPath, func=func, funcName=funcName,
+		rType2Llvm=rType2Llvm, nativeModule=nativeModule)
 
 	#browser()
 	return(res)
@@ -161,6 +192,9 @@ inferFunctionType = function(context, funcSignature=NULL, forcedReturnType=NULL)
 	source=context$source
 	blockList=context$blockList
 	constants=context$constants
+	rType2Llvm=context$rType2Llvm
+
+	#browser()
 
 	args=list()
 	llvmSignature=list()
@@ -239,13 +273,18 @@ inferFunctionType = function(context, funcSignature=NULL, forcedReturnType=NULL)
 }
 
 
-initLlvmContext = function(modName, absPath) {
+initLlvmContext = function(modName, absPath, rType2Llvm) {
 	InitializeNativeTarget()
 
    # Create the module which will house the function
 	#mod = Module(modName)
 	#browser()
-	r_helper=new("r_module",modName)
+
+	if (is.character(modName)) {
+		r_helper=new("r_module",modName)
+	} else {
+		r_helper=new("r_native_module",modName, rType2Llvm(getType(name=tpAny)))
+	}
 
 	#creating the debug builder
 	#browser()
@@ -262,6 +301,7 @@ initLlvmContext = function(modName, absPath) {
 			{stop(paste("Type",rType,"is unknown"))}
 		)
 	}
+
 
 	debugCompUnit = newDebugCU(debugBuilder, basename(absPath), dirname(absPath))
 	#
@@ -285,6 +325,7 @@ compile2llvm = function(context, llvmContext) {
 	
 	debugBuilder=llvmContext$debugBuilder
 	rType2LlvmDebug=llvmContext$rType2LlvmDebug
+	rType2Llvm=context$rType2Llvm
 	mod=llvmContext$mod
 	debugCompUnit=llvmContext$debugCompUnit
 
@@ -293,7 +334,7 @@ compile2llvm = function(context, llvmContext) {
 	funs=context$funs
 
 
-	globalVarList=createVarList(r_helper,context$vars, context$symbols, context$strings)
+	globalVarList=createVarList(r_helper,context$vars, context$symbols, context$strings, rType2Llvm(getType(name=tpAny)))
 
 	debugSignature=list()
 
@@ -335,7 +376,7 @@ compile2llvm = function(context, llvmContext) {
 
 		if (i==1) {
 			cirHandlerStuff=initCIRHandler(r_helper, globalVarList, params, debugBuilder, debugFun, debugCompUnit, ir, 
-				attr(body(func)[[2]],"srcref")[1], rType2LlvmDebug)
+				attr(body(func)[[2]],"srcref")[1], rType2LlvmDebug, nativeModule=context$nativeModule)
 		}
 
 
@@ -424,6 +465,11 @@ compile2llvm = function(context, llvmContext) {
 	context$fun=fun
 	context$initFun=globalVarList$FUN
 
+	if (! is.null(cirHandlerStuff$nativeModule)) {
+		context$nativeAdresses=cirHandlerStuff$nativeAdresses
+		context$nativeModule=cirHandlerStuff$nativeModule
+	}
+
 	return(context)
 }
 
@@ -483,9 +529,23 @@ finishCompilation <- function(ctxt,llvmContext, llvmSignature) {
 	
 	finalizeDIBuilder(debugBuilder)
 	engine=ExecutionEngine(mod)
+
+	if (! is.null(ctxt$nativeModule)) {
+		addModule(engine,ctxt$nativeModule)
+
+		globalList=c(getGlobalVariables(ctxt$nativeModule), getModuleFunctions(ctxt$nativeModule))
+
+		for (global in names(ctxt$nativeAdresses)) {
+			addGlobalMapping(engine, globalList[[global]], ctxt$nativeAdresses[[global]])
+		}
+	}
+
 	finalizeEngine(engine)
 
-	showModule(mod)
+	#showModule(mod)
+
+	#browser()
+
 	if (!verifyModule(mod)) {
 		print("juhu")
 	} else {
@@ -513,13 +573,17 @@ finishCompilation <- function(ctxt,llvmContext, llvmSignature) {
 }
 
 
-byte2llvm = function(func) {
+byte2llvm = function(func, useNative=TRUE) {
 	#browser()
 	funcName=deparse(substitute(func))
-	ctxt=initCompileContext(func,funcName)
+	ctxt=initCompileContext(func,funcName, useNative)
 	ctxt=inferFunctionType(context=ctxt,forcedReturnType=getType(name=tpAny))
 
-	llvmContext=initLlvmContext(funcName, ctxt$absPath)
+	if (useNative) {
+		llvmContext=initLlvmContext(ctxt$nativeModule, ctxt$absPath, ctxt$rType2Llvm)
+	} else {
+		llvmContext=initLlvmContext(funcName, ctxt$absPath, ctxt$rType2Llvm)
+	}
 	ctxt2=compile2llvm(ctxt,llvmContext)
 	res=finishCompilation(ctxt2,llvmContext, ctxt$llvmSignature)
 	return(res)

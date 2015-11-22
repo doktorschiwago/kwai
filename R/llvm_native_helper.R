@@ -16,7 +16,7 @@
 #result should be returned unprotected
 
 
-r_module = setRefClass("r_module",
+r_native_module = setRefClass("r_native_module",
     # Define the slots
     fields = list(
 
@@ -27,10 +27,10 @@ r_module = setRefClass("r_module",
 
 			Rf_lcons = "GlobalVariable",
 			
-			Rf_protect = "GlobalVariable",
-			Rf_unprotect = "GlobalVariable",
-			Rf_allocVector = "GlobalVariable",
-			Rf_duplicate =  "GlobalVariable",
+			Rf_protect = "Function",
+			Rf_unprotect = "Function",
+			Rf_allocVector = "Function",
+			Rf_duplicate =  "Function",
 			Rf_eval = "GlobalVariable",
 			Rf_install = "GlobalVariable",
 			Rf_mkString = "GlobalVariable",
@@ -46,73 +46,58 @@ r_module = setRefClass("r_module",
 
             ),
 	methods = list(
-		initialize = function(modName) {
+		initialize = function(nativeModule, rNativeType) {
 
 			#browser()
 			
-
-			mod<<-Module(modName)
+			mod<<-nativeModule
 
 			#Resolve external Rf_lcons symbol
-			Rf_lconsType=functionType(SEXPType,c(SEXPType,SEXPType),0)
+			Rf_lconsType=functionType(rNativeType,c(rNativeType,rNativeType),0)
 			Rf_lconsSym = getNativeSymbolInfo("Rf_lcons")
 			llvmAddSymbol(Rf_lconsSym) # $address)
 			Rf_lcons <<- createGlobalVariable("Rf_lcons", mod, Rf_lconsType)
 
 			#R_NilValue
-			R_NilValueSym = getNativeSymbolInfo("R_NilValue")
-			llvmAddSymbol(R_NilValueSym) # $address)
-			R_NilValue <<- createGlobalVariable("R_NilValue", mod, SEXPType)
+			R_NilValue <<- getGlobalVariable(mod,"R_NilValue")
 
 			#Resolve external Rf_protect
-			Rf_protectType=functionType(SEXPType,c(SEXPType),0)
-			Rf_protectSym = getNativeSymbolInfo("Rf_protect")
-			llvmAddSymbol(Rf_protectSym) # $address)
-			Rf_protect <<- createGlobalVariable("Rf_protect", mod, Rf_protectType)
+			Rf_protect <<- getModuleFunctions(mod)$Rf_protect
 
 			#Resolve external Rf_unprotect
-			Rf_unprotectType=functionType(VoidType,c(Int32Type),0)
-			Rf_unprotectSym = getNativeSymbolInfo("Rf_unprotect")
-			llvmAddSymbol(Rf_unprotectSym) # $address)
-			Rf_unprotect <<- createGlobalVariable("Rf_unprotect", mod, Rf_unprotectType)
+			Rf_unprotect <<- getModuleFunctions(mod)$Rf_unprotect
 
 			#Resolve external Rf_allocVector
-			Rf_allocVectorType=functionType(SEXPType,c(Int32Type, Int32Type),0)
-			Rf_allocVectorSym = getNativeSymbolInfo("Rf_allocVector")
-			llvmAddSymbol(Rf_allocVectorSym) # $address)
-			Rf_allocVector <<- createGlobalVariable("Rf_allocVector", mod, Rf_allocVectorType)
+			Rf_allocVector <<- getModuleFunctions(mod)$Rf_allocVector
 
 			#Resolve external Rf_duplicate
-			Rf_duplicateType=functionType(SEXPType,c(SEXPType),0)
-			Rf_duplicateSym = getNativeSymbolInfo("Rf_duplicate")
-			llvmAddSymbol(Rf_duplicateSym) # $address)
-			Rf_duplicate <<- createGlobalVariable("Rf_duplicate", mod, Rf_duplicateType)	
+			Rf_duplicate <<- getModuleFunctions(mod)$Rf_duplicate	
 
 			#Resolve external Rf_eval
-			Rf_evalType=functionType(SEXPType,c(SEXPType,SEXPType),0)
+			Rf_evalType=functionType(rNativeType,c(rNativeType,rNativeType),0)
 			Rf_evalSym = getNativeSymbolInfo("Rf_eval")
 			llvmAddSymbol(Rf_evalSym) # $address)
 			Rf_eval <<- createGlobalVariable("Rf_eval", mod, Rf_evalType)	
 
 			#Resolve external Rf_install
-			Rf_installType=functionType(SEXPType,c(StringType),0)
+			Rf_installType=functionType(rNativeType,c(StringType),0)
 			Rf_installSym = getNativeSymbolInfo("Rf_install")
 			llvmAddSymbol(Rf_installSym) # $address)
 			Rf_install <<- createGlobalVariable("Rf_install", mod, Rf_installType)	
 
 			#Resolve lang3*
-			Rf_lang1 <<- r_installFunctionSymbol("Rf_lang1",functionType(SEXPType,c(SEXPType),0))
-			Rf_lang2 <<- r_installFunctionSymbol("Rf_lang2",functionType(SEXPType,c(SEXPType, SEXPType),0))
-			Rf_lang3 <<- r_installFunctionSymbol("Rf_lang3",functionType(SEXPType,c(SEXPType, SEXPType, SEXPType),0))
-			Rf_lang4 <<- r_installFunctionSymbol("Rf_lang4",functionType(SEXPType,c(SEXPType, SEXPType, SEXPType, SEXPType),0))
+			Rf_lang1 <<- r_installFunctionSymbol("Rf_lang1",functionType(rNativeType,c(rNativeType),0))
+			Rf_lang2 <<- r_installFunctionSymbol("Rf_lang2",functionType(rNativeType,c(rNativeType, rNativeType),0))
+			Rf_lang3 <<- r_installFunctionSymbol("Rf_lang3",functionType(rNativeType,c(rNativeType, rNativeType, rNativeType),0))
+			Rf_lang4 <<- r_installFunctionSymbol("Rf_lang4",functionType(rNativeType,c(rNativeType, rNativeType, rNativeType, rNativeType),0))
 
-			R_GlobalEnv <<- r_installFunctionSymbol("R_GlobalEnv", SEXPType)
-			Rf_findVar <<- r_installFunctionSymbol("Rf_findVar", functionType(SEXPType,c(SEXPType,SEXPType),0))
+			R_GlobalEnv <<- r_installFunctionSymbol("R_GlobalEnv", rNativeType)
+			Rf_findVar <<- r_installFunctionSymbol("Rf_findVar", functionType(rNativeType,c(rNativeType,rNativeType),0))
 
-			Rf_mkString <<- r_installFunctionSymbol("Rf_mkString",functionType(SEXPType,c(StringType),0))
+			Rf_mkString <<- r_installFunctionSymbol("Rf_mkString",functionType(rNativeType,c(StringType),0))
 
-			SET_TAG <<- r_installFunctionSymbol("SET_TAG",functionType(VoidType,c(SEXPType,SEXPType),0))
-			SET_VECTOR_ELT <<- r_installFunctionSymbol("SET_VECTOR_ELT",functionType(SEXPType,c(SEXPType, Int32Type, SEXPType),0))
+			SET_TAG <<- r_installFunctionSymbol("SET_TAG",functionType(VoidType,c(rNativeType,rNativeType),0))
+			SET_VECTOR_ELT <<- r_installFunctionSymbol("SET_VECTOR_ELT",functionType(rNativeType,c(rNativeType, Int32Type, rNativeType),0))
 
           },
 
@@ -168,7 +153,7 @@ r_module = setRefClass("r_module",
 
 		},
 
-
+	
 		r_eval=function(builder, op) {
 			r_globalenv=createLoad(builder,R_GlobalEnv)
 			createCall(builder,Rf_eval, op, r_globalenv)
@@ -190,7 +175,14 @@ r_module = setRefClass("r_module",
 		},
 
 		r_allocVector = function(builder, type, length) {
-			return(createCall(builder,Rf_allocVector,createConstant(builder,as.integer(type)),createConstant(builder,as.integer(length))))
+			#browser()
+			destType=Rllvm:::getType(getFunctionArgs(mod$Rf_allocVector)[[2]])
+			createCall(
+				builder,
+				mod$Rf_allocVector,
+				createConstant(builder,as.integer(type)), 
+				createIntCast(builder,createConstant(builder,as.integer(length)), destType)
+			)
 		}
 
 	)

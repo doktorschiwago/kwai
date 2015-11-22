@@ -621,12 +621,6 @@ visitStackMachine3 <- function(opTable, vsmHandler, initStack=NULL, callHandlerF
 			"POP.OP" = {
 				callHandler=callHandlerForStackOp
 				ignoreRes=TRUE			
-			},
-			"DUP2ND.OP" = {
-				res=stack[[currentStackPos-1]]
-
-				callHandler=callHandlerForStackOp
-				ignoreRes=TRUE	
 			}
 		)
 
