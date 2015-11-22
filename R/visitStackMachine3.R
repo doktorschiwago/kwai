@@ -160,7 +160,7 @@ OpcodeList = list(
 	),
 	list(
 		opcodes=c(
-			"STARTSUBSET.OP", "STARTSUBSET2.OP"),
+			"STARTSUBSET.OP", "STARTSUBSET2.OP", "STARTSUBSET2_N.OP"),
 		args=promiseList(
 			expression	= constantArgCode(1),
 			unknown		= arg(1),
@@ -174,6 +174,15 @@ OpcodeList = list(
 		args=promiseList(
 			variable	= vmStack(-1),
 			offset		= vmStack(0)
+		)
+	),
+	list(
+		opcodes=c(
+			"VECSUBSET2.OP"),
+		args=promiseList(
+			variable	= vmStack(-1),
+			offset		= vmStack(0),
+			expression	= constantArgCode(1)			
 		)
 	),
 	list(
@@ -392,6 +401,7 @@ renderStackMachine <- function(source, constants) {
 	funArgCounter=list()
 
 	constantArgCode = function(pos) {
+		#browser()
 		list(expression=constants[[1+source[[i+pos]]]])
 	}
 
@@ -632,7 +642,7 @@ visitStackMachine3 <- function(opTable, vsmHandler, initStack=NULL, callHandlerF
 
 			for (argName in names(funcArgTypes)) {
 				if (funcArgTypes[[argName]] == "stack") {
-					browser()
+					#browser()
 					op[[argName]]=eval(op[[argName]])
 				}
 			}

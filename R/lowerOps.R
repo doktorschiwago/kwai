@@ -90,12 +90,23 @@ lowerOps=function(opTable) {
 				i=i-1
 			},
 
-			"PUSHARG.OP" = {
+			"PUSHARG.OP", "STARTSUBSET2.OP" = {
 				opTable=c(opTable[1:(i-1)], opTable[(i+1):length])
 				i=i-1
 			},
 			"PUSHTRUEARG.OP" = {
 				op$opName="LDTRUE.OP"
+				opTable[[i]]=op
+				i=i-1
+			},
+
+			"VECSUBSET2.OP" = {
+				op$opName="DFLTSUBSET2.OP"
+				opTable[[i]]=op
+				i=i-1
+			},
+			"STARTSUBSET2_N.OP" = {
+				op$opName="STARTSUBSET2.OP"
 				opTable[[i]]=op
 				i=i-1
 			}
