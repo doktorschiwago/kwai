@@ -7,4 +7,4 @@
 #  END { print s }' profile.txt | \
 #sort | uniq -c | sort -r -n -k 1,1
 
-cat profile.txt | grep "#" | cut -d' ' -f5 | grep -v '0x' | sort | uniq -c | sort -r -n -k 1,1 | less
+./profile2b.py | sort | uniq -c | sort -r -n -k 1,1 | less
