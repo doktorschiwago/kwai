@@ -78,3 +78,19 @@ SEXP op2_DFLTSUBSET2(SEXP rho, SEXP stack0, SEXP stack1) {
 		LCONS(stack0, LCONS(stack1, R_NilValue))
     );
 }
+
+SEXP do_subassign2_dflt(SEXP, SEXP, SEXP, SEXP);
+
+SEXP op2_DFLTSUBASSIGN2(SEXP rho, SEXP stack0, SEXP stack1, SEXP stack2) {
+	return do_subassign2_dflt(R_NilValue, R_Subassign2Sym, LCONS(stack0, LCONS(stack1,  LCONS(stack2, R_NilValue))), rho); 
+}
+
+int force_logical(SEXP s)
+{
+    SEXP value = s;
+    if (IS_SCALAR(value, LGLSXP) && LOGICAL(value)[0] != NA_LOGICAL)
+		return LOGICAL(value)[0];
+    else {
+		return asLogicalNoNA(value, R_NilValue);
+    }
+}

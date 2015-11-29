@@ -5,26 +5,40 @@ promiseList = function(...) {
 cirHandlerTemplate=list(
 	list(
 		opCodeMatch=list(
-			ADD.OP="+", 
-			SUB.OP="-", 
-			MUL.OP="*", 
-			DIV.OP="/", 
 			EQ.OP="==", 
 			NE.OP="!=", 
 			LT.OP="<", 
 			LE.OP="<=", 
 			GE.OP=">=", 
-			GT.OP=">", 
-			AND.OP="&&", 
-			AND2ND.OP="&&", 
-			OR.OP="||",
-			EXPT.OP="^",
-			COLON.OP=":"
+			GT.OP=">"
+
 		),
 		args=promiseList(
 			a1=left_operand,
 			a2=right_operand
-		)
+		),
+
+		forceTemp=list(a2=TRUE)
+	),
+	list(
+		opCodeMatch=list(
+			ADD.OP="+" ,
+			AND.OP="&&", 
+			AND2ND.OP="&&", 
+			OR.OP="||",
+			EXPT.OP="^",
+			COLON.OP=":",
+			SUB.OP="-", 
+			MUL.OP="*", 
+			DIV.OP="/"
+
+		),
+		args=promiseList(
+			a1=left_operand,
+			a2=right_operand
+		),
+
+		forceTemp=list(a2=TRUE)
 	),
 	list(
 		opCodeMatch=list(
@@ -35,11 +49,21 @@ cirHandlerTemplate=list(
 			a1=variable,
 			a2=offset
 		)
+	),
+	list(
+		opCodeMatch=list(
+			DFLTSUBASSIGN2.OP = "[[<-"
+		),
+		args=promiseList(
+			a1=var,
+			a2=entry,
+			a3=val
+		)
 	)
 )
 
 
-createVarList <- function(mod, arguments, symbols, strings, rType) {
+createVarList <- function(mod, symbols, strings, rType) {
 
 	#browser()
 
@@ -75,16 +99,6 @@ createVarList <- function(mod, arguments, symbols, strings, rType) {
 	for (varName in names(symbols)) {
 		if (is.null(globalVarList$STRINGS[symbols[[varName]]][[1]])) {
 			globalVarList$STRINGS[[symbols[[varName]]]]=createGlobalVariable(paste(sep="","string_",varName), mod$mod, val=symbols[[varName]])
-		}
-	}
-
-	for (varName in names(arguments)) {
-		if (is.null(globalVarList$STRINGS[varName][[1]])) {
-			globalVarList$STRINGS[[varName]]=createGlobalVariable(paste(sep="","string_",varName), mod$mod, val=varName)
-			
-		}
-		if (is.null(strings[varName][[1]])) {
-			strings[[varName]]=varName
 		}
 	}
 
@@ -125,23 +139,23 @@ createVarList <- function(mod, arguments, symbols, strings, rType) {
 	}
 	#creating environment that keeps all objects
 
-	protectEnv=mod$r_call_eval(initBuilder,globalSymbolList$new.env)
+	protectEnv=mod$r_call_eval(initBuilder,globalSymbolList$new.env, NULL)
 	mod$r_protect(initBuilder, protectEnv)
 	cntProtected=cntProtected+1
 
 	#another environment keeps precalcualted, intermediate results
 
-	intEnv=mod$r_call_eval(initBuilder,globalSymbolList$new.env)
+	intEnv=mod$r_call_eval(initBuilder,globalSymbolList$new.env, NULL)
 	mod$r_protect(initBuilder, intEnv)
 	#cntProtected=cntProtected+1
 	
-	mod$r_call_eval(initBuilder,globalSymbolList$SUBSET_ASSIGN2,protectEnv,globalStringList$intEnv, intEnv)
+	mod$r_call_eval(initBuilder,globalSymbolList$SUBSET_ASSIGN2, NULL, protectEnv,globalStringList$intEnv, intEnv)
 
 	symEnv=mod$r_call_eval(initBuilder,globalSymbolList$new.env)
 	mod$r_protect(initBuilder, symEnv)
 	#cntProtected=cntProtected+1
 
-	mod$r_call_eval(initBuilder,globalSymbolList$SUBSET_ASSIGN2,protectEnv,globalStringList$symEnv, symEnv)
+	mod$r_call_eval(initBuilder,globalSymbolList$SUBSET_ASSIGN2, NULL, protectEnv,globalStringList$symEnv, symEnv)
 
 	mod$r_unprotect(initBuilder, 2)
 
@@ -164,7 +178,7 @@ createVarList <- function(mod, arguments, symbols, strings, rType) {
 		createStore(initBuilder, globalStringList[[name]], name2_var)
 
 		mod$r_call_eval(initBuilder,
-			createLoad(initBuilder, globalSymbolList$SUBSET_ASSIGN2),intEnv,globalStringList[[name]], globalStringList[[name]])
+			createLoad(initBuilder, globalSymbolList$SUBSET_ASSIGN2), NULL, intEnv,globalStringList[[name]], globalStringList[[name]])
 			
 		globalStringList[[name]]=name2_var
 
@@ -185,7 +199,7 @@ createVarList <- function(mod, arguments, symbols, strings, rType) {
 
 
 initCIRHandler <- function(mod, globalVarList, parameters, debugBuilder, debugFun, debugCompUnit, irb, line,
-	rType2LlvmDebug, nativeModule=NULL) {
+	rType2LlvmDebug, sexpType, nativeModule=NULL) {
 
 	useNative=! is.null(nativeModule)
 
@@ -197,11 +211,6 @@ initCIRHandler <- function(mod, globalVarList, parameters, debugBuilder, debugFu
 	#browser()
 
 
-
-	#creating environment that keeps all local variables
-
-	funcEnv=mod$r_call_eval(irb,createLoad(irb,globalSymbolList$new.env))
-	mod$r_protect(irb, funcEnv)
 	
 
 	#creating list for stack
@@ -218,26 +227,60 @@ initCIRHandler <- function(mod, globalVarList, parameters, debugBuilder, debugFu
 	#browser()
 	
 
+	nativeParameters=list()
+
+	varIndex=1
 
 	for (argName in names(parameters)) {
-		if (class(parameters[[argName]])[1] != "AllocaInst") {
+		if (class(parameters[[argName]])[1] != "kwai_type") {
 
-			mod$r_call_eval(irb,
-				createLoad(irb, globalSymbolList$SUBSET_ASSIGN2),
-				funcEnv,
-				createLoad(irb, globalStringList[[argName]]),
-				parameters[[argName]])
 
-			newDebugLocalVariable(debugBuilder, irb, debugFun, parameters[[argName]], line, debugCompUnit, 
+			nativeParameters[[argName]]=list(
+				varIndex=varIndex,
+				llvmVar=createLocalVariable(irb, sexpType, argName)
+			)
+
+			createStore(irb, parameters[[argName]], nativeParameters[[argName]]$llvmVar)
+
+			newDebugLocalVariable(debugBuilder, irb, debugFun, nativeParameters[[argName]]$llvmVar, line, debugCompUnit, 
 					rType2LlvmDebug(getType(name=tpAny)), argIndex)
 
 			argIndex=argIndex+1
-		} else {
-			newDebugLocalVariable(debugBuilder, irb, debugFun, parameters[[argName]], line, debugCompUnit, 
+			varIndex=varIndex+1
+
+
+		} else if (is.null(nativeParameters[[argName]])) {
+
+
+			nativeParameters[[argName]]=list(
+				varIndex=varIndex,
+				llvmVar=createLocalVariable(irb, sexpType, argName)
+			)
+
+			newDebugLocalVariable(debugBuilder, irb, debugFun, nativeParameters[[argName]]$llvmVar, line, debugCompUnit, 
 					rType2LlvmDebug(getType(name=tpAny)), 0)
+
+			varIndex=varIndex+1
+
 		}
 	}
 
+	#browser()
+
+	#creating list that keeps all local variables
+
+	funcEnv=mod$r_allocVector(irb,19,varIndex)
+	mod$r_protect(irb, funcEnv)
+
+	#save function parameters
+
+	for (argName in names(parameters)) {
+		if (class(parameters[[argName]])[1] != "kwai_type") {
+
+			mod$r_set_vector_elt(irb,funcEnv,nativeParameters[[argName]]$varIndex,parameters[[argName]])
+
+		}
+	}
 
 	if (useNative) {
 		handlerStuff$nativeModule=nativeModule
@@ -278,7 +321,7 @@ initCIRHandler <- function(mod, globalVarList, parameters, debugBuilder, debugFu
 		for (global in names(globalList)) {
 
 			#browser()
-	
+			print(global)
 	
 			#check if global is resolvable
 			linkage=getLinkage(globalList[[global]])
@@ -289,7 +332,7 @@ initCIRHandler <- function(mod, globalVarList, parameters, debugBuilder, debugFu
 			#retrieve debug address
 
 			globalAddress=symbolTable[[global]]
-			print(paste("Symbol:", global, "at",globalAddress))
+			#print(paste("Symbol:", global, "at",globalAddress))
 
 			if (! is.null(globalAddress)) {
 				globalAddress2=hex2int64(globalAddress)+refOffset
@@ -305,7 +348,14 @@ initCIRHandler <- function(mod, globalVarList, parameters, debugBuilder, debugFu
 				#browser()
 				handlerStuff$nativeFunctions[[substr(global,5,99)]]=funcList[[global]]
 			} else {
-				print(paste("unknown function:",global))
+				switch(global,
+					"force_logical" = {
+						handlerStuff$nativeFunctions[[global]]=funcList[[global]]
+					},
+					{
+						print(paste("unknown function:",global))
+					}
+				)
 			}
 	
 			#print(globalAddress)
@@ -325,6 +375,7 @@ initCIRHandler <- function(mod, globalVarList, parameters, debugBuilder, debugFu
 	handlerStuff$stackListPos=1
 	handlerStuff$globalStringList=globalStringList
 	handlerStuff$globalSymbolList=globalSymbolList
+	handlerStuff$nativeParameters=nativeParameters
 	
 	handlerStuff
 }
@@ -333,13 +384,15 @@ createCIRHandler <- function(handlerStuff, globalVarList, parameters, mod, irb, 
 	makeProm=FALSE) {
 	#browser()
 
-	funcEnv=handlerStuff$funcEnv	
+	funcEnv=handlerStuff$funcEnv
 
 	handler=list()
 
 	globalSymbolList=handlerStuff$globalSymbolList
 
+	nativeParameters=handlerStuff$nativeParameters
 
+	
 
 
 	defaultCIRHandler <- function(...) {
@@ -351,8 +404,27 @@ createCIRHandler <- function(handlerStuff, globalVarList, parameters, mod, irb, 
 		argCount=length(opGroup$args)
 
 		argList=list()
-		for (i in (1:argCount)) {
-			argList[[i]]=eval(opGroup$args[[i]], envir=args)
+
+		useNative=! is.null(handlerStuff$nativeFunctions[[substr(opName, 0, nchar(opName)-3)]])
+		useNative=useNative && (! makeProm)
+
+		#browser()
+
+		i=1
+		for (argName in names(opGroup$args)) {
+			argList[[i]]=eval(opGroup$args[[argName]], envir=args)
+
+			if (useNative && (!eval(opGroup$args[[argName]], envir=args$argTemp))) {
+				if (! is.null(opGroup$forceTemp)) {
+					for (arg in names(opGroup$forceTemp)) {
+						if (argName==arg && opGroup$forceTemp[[arg]]) {
+							argList[[i]]=createCall(irb,mod$Rf_duplicate,argList[[i]])
+						}
+					}
+				}
+			}
+
+			i=i+1
 		}
 
 		#browser()
@@ -360,11 +432,7 @@ createCIRHandler <- function(handlerStuff, globalVarList, parameters, mod, irb, 
 			res=do.call(mod$r_call,c(irb, createLoad(irb, globalSymbolList[[opName]]), argList))
 
 			#createStore(irb, binOp(irb, Add, createLoad(irb, cntProtected), 2L), cntProtected)
-		} else if (is.null(handlerStuff$nativeFunctions[[substr(opName, 0, nchar(opName)-3)]])) {
-			res=do.call(mod$r_call_eval,c(irb, createLoad(irb, globalSymbolList[[opName]]), argList))
-
-			#createStore(irb, binOp(irb, Add, createLoad(irb, cntProtected), 3L), cntProtected)
-		} else {
+		} else if (useNative) {
 			#browser()
 
 			nativeFunc=handlerStuff$nativeFunctions[[substr(opName, 0, nchar(opName)-3)]]
@@ -373,17 +441,26 @@ createCIRHandler <- function(handlerStuff, globalVarList, parameters, mod, irb, 
 			}
 			res=do.call(createCall, c(irb, handlerStuff$nativeFunctions[[substr(opName, 0, nchar(opName)-3)]], 
 				createLoad(irb, mod$R_GlobalEnv), argList))
+		} else {
+
+			res=do.call(mod$r_call_eval,c(irb, createLoad(irb, globalSymbolList[[opName]]), NULL, argList))
+
+			#createStore(irb, binOp(irb, Add, createLoad(irb, cntProtected), 3L), cntProtected)
+
 		}
 		return(res)
 	}
 
-
+	#browser()
 	for (opGroup in cirHandlerTemplate) {
 		argCount=length(opGroup$args)
-		for (i in (2:argCount)) {
-			opGroup$args[[i-1]]=opGroup$args[[i]]
+		argList2=list()
+		for (argName in names(opGroup$args)) {
+			if (argName != "") {
+				argList2[[argName]]=opGroup$args[[argName]]
+			}
 		}
-		opGroup$args[[argCount]]=NULL
+		opGroup$args=argList2
 
 		for (op in names(opGroup$opCodeMatch)) {
 			handler[[op]]=defaultCIRHandler
@@ -406,35 +483,47 @@ createCIRHandler <- function(handlerStuff, globalVarList, parameters, mod, irb, 
 			mod$r_unprotect(irb, 2)
 			createReturn(irb, val)
 		} else {
+			#mod$r_protect(irb,1)
 			return(val)
 		}
 	}
 
 	handler$GETVAR.OP <- function(varName, ...) {
-		varName2=createLoad(irb,handlerStuff$globalStringList[[varName]])
 
-
-		SUBSET_GET=createLoad(irb, globalSymbolList$SUBSET_GET)
 
 		if (makeProm) {
-			res=mod$r_call(irb, SUBSET_GET,funcEnv,varName2)
+			#stop("not supported!")
+			#varName2=createLoad(irb,handlerStuff$globalStringList[[varName]])
+			#SUBSET_GET=createLoad(irb, globalSymbolList$SUBSET_GET)
+			#res=mod$r_call(irb, SUBSET_GET,funcEnv,varName2)
 			#mod$r_unprotect(irb, 3)
+			res=createLoad(irb, handlerStuff$nativeParameters[[varName]]$llvmVar)
 		} else {
-			res=mod$r_call_eval(irb, SUBSET_GET,funcEnv,varName2)
-			res=createCall(irb,mod$Rf_duplicate,res)
+			#res=mod$r_call_eval(irb, SUBSET_GET,funcEnv,varName2)
+			#res=createCall(irb,mod$Rf_duplicate,res)
 			#mod$r_unprotect(irb, 4)
+			res=createLoad(irb, handlerStuff$nativeParameters[[varName]]$llvmVar)
 		}
 		return(res)
 	}
 
-	handler$SETVAR.OP<-function(varName, val,...) {
+	handler$SETVAR.OP<-function(varName, val, argTemp, ...) {
 		#browser()
 		if (makeProm) {
 			stop("no sense in this!")
 		}
-		varName2=createLoad(irb,handlerStuff$globalStringList[[varName]])
-		res=mod$r_call_eval(irb, createLoad(irb, globalSymbolList$SUBSET_ASSIGN2), funcEnv,varName2,val)
-		return(res)
+
+		createStore(irb, val, handlerStuff$nativeParameters[[varName]]$llvmVar)
+		#varName2=createLoad(irb,handlerStuff$globalStringList[[varName]])
+		#res=mod$r_call_eval(irb, createLoad(irb, globalSymbolList$SUBSET_ASSIGN2), funcEnv,varName2,val)
+
+		mod$r_set_vector_elt(irb,funcEnv,nativeParameters[[varName]]$varIndex,val)
+
+		#entry=handler$LDCONST.OP(varName)
+		#mod$r_protect(irb, entry)
+		#handler$DFLTSUBASSIGN2.OP(val = val, entry = entry, var=funcEnv, argTemp=list(val=argTemp$val, entry=TRUE, var=FALSE))
+		#mod$r_unprotect(irb, 1)
+		return(val)
 	}
 
 	handler$LDCONST.OP<-function(value, ...) {
@@ -464,22 +553,31 @@ createCIRHandler <- function(handlerStuff, globalVarList, parameters, mod, irb, 
 		newVector
 	}
 
-	handler$BRIFNOT.OP<-function(val, goto, expression, ... ) {
+	handler$BRIFNOT.OP<-function(val, goto, expression, argTemp, ... ) {
 		#browser()
 		#debugSetLocation(irb, debugFunction, attr(expression,"srcref")[1], attr(expression,"srcref")[5])
 
-		offset=handler$LDCONST.OP(1)
-		mod$r_protect(irb, offset)
+		useNative=! is.null(handlerStuff$nativeFunctions$force_logical)
 
-		val2=handler$DFLTSUBSET2.OP(variable = val, offset = offset)
-		mod$r_protect(irb, val2)
+		if (useNative) {
+			nativeFunc=handlerStuff$nativeFunctions$force_logical
+			val5=createCall(irb, nativeFunc,val)
+		} else {
 
-		val3=createBitCast(irb, val2,pointerType(Int32Type))
-		val4=createGEP(irb,val3,c(createConstant(irb,10L)))
-		val5=createLoad(irb,val4)
+			offset=handler$LDCONST.OP(1)
+			mod$r_protect(irb, offset)
+
+			val2=handler$DFLTSUBSET2.OP(variable = val, offset = offset, argTemp=list(variable=argTemp$val, offset=TRUE))
+			mod$r_protect(irb, val2)
+
+			val3=createBitCast(irb, val2,pointerType(Int32Type))
+			val4=createGEP(irb,val3,c(createConstant(irb,10L)))
+			val5=createLoad(irb,val4)
+			
+
+			mod$r_unprotect(irb, 2)
+		}
 		val6=createTrunc(irb,val5,getIntegerType(1))
-
-		mod$r_unprotect(irb, 2)
 		createCondBranch(irb, val6,blockList[[currentBlock+1]]$block,blockList[[goto]]$block)
 
 	}
@@ -493,7 +591,13 @@ createCIRHandler <- function(handlerStuff, globalVarList, parameters, mod, irb, 
 #	}
 #
 	handler$DUP2ND.OP<-function(top, secondTop,...) {
-		return(createCall(irb,mod$Rf_duplicate,secondTop))
+		#return(createCall(irb,mod$Rf_duplicate,secondTop))
+		return(secondTop)
+	}
+
+	handler$DUP3RD.OP<-function(top, secondTop, thirdTop, ...) {
+		#return(createCall(irb,mod$Rf_duplicate,secondTop))
+		return(thirdTop)
 	}
 
 	handler$GETFUN.OP<-function(funName, ...) {
@@ -531,7 +635,7 @@ createCIRHandler <- function(handlerStuff, globalVarList, parameters, mod, irb, 
 
 		call=do.call(createCall,args)
 		mod$r_protect(irb, call)
-		res=mod$r_eval(irb,call)
+		res=mod$r_eval(irb,call, env=createLoad(irb,mod$R_GlobalEnv))
 
 		mod$r_unprotect(irb, 1)
 		return(res)

@@ -275,7 +275,7 @@ def findSwitchTwo(node):
 		  		"CALL", "CALLBUILTIN", "CALLSPECIAL", "MAKECLOSURE",
 				"DOTSERR", "STARTASSIGN", "ENDASSIGN", "STARTSUBSET", "DFLTSUBSET",
 		  		"STARTSUBASSIGN", "DFLTSUBASSIGN", "STARTC", "DFLTC", "STARTSUBSET2",
-		  		"STARTSUBASSIGN2", "DFLTSUBASSIGN2",
+		  		"STARTSUBASSIGN2", 
 		  		"GETVAR_MISSOK", "DDVAL_MISSOK", "VISIBLE", "SETVAR2", "STARTASSIGN2",
 		  		"ENDASSIGN2", "SETTER_CALL", "GETTER_CALL", "SWAP", "DUP2ND",
 		  		"SWITCH", "RETURNJMP", 
@@ -454,10 +454,10 @@ def printIf(node):
 	#pdb.set_trace()
 	children=list(node)
 	
-	res="if (" + printSource(children[0]) + ")\n{\n" + printSource(children[1]) + "}\n"
+	res="if (" + printSource(children[0]) + ")\n{\n" + printSource(children[1]) + ";}\n"
 	
 	if len(children)>2:
-		res+="else {" + printSource(children[2]) + "}\n"
+		res+="else {" + printSource(children[2]) + ";}\n"
 
 	return res
 

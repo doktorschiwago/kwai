@@ -119,7 +119,7 @@ is.compile <- function(func)
     any(grepl("bytecode:", last_2_lines)) # returns TRUE if it finds the text "bytecode:" in any of the last two lines of the function's print
 }
 
-initCompileContext <- function(func,funcName, useNative=TRUE) {
+initCompileContext <- function(func,funcName, useNative) {
 	#reading function Signature
 
 
@@ -149,6 +149,11 @@ initCompileContext <- function(func,funcName, useNative=TRUE) {
 	#browser()
 
 	blockList=discoverBlocks2(opList2)
+
+	for (i in 1:length(blockList)) {
+		blockList[[i]]$opTable=lowerOps2(blockList[[i]]$opTable)
+		printBlock(blockList[[i]]$opTable)
+	}
 
 	if (useNative) {
 		#browser()
@@ -198,8 +203,7 @@ inferFunctionType = function(context, funcSignature=NULL, forcedReturnType=NULL)
 
 	args=list()
 	llvmSignature=list()
-
-	vars=list()
+	strings=list()
 	
 	if (! is.null(argList)) {
 		for (i in 1:length(argList)) {
@@ -240,7 +244,7 @@ inferFunctionType = function(context, funcSignature=NULL, forcedReturnType=NULL)
 				llvmSignature[[arg$name]]=rType2Llvm(arg$returnType)
 			}
 
-			vars[[arg$name]]=arg$returnType
+			strings[[arg$name]]=arg$name
 
 		}
 	}
@@ -249,7 +253,7 @@ inferFunctionType = function(context, funcSignature=NULL, forcedReturnType=NULL)
 	#browser()
 
 	symbols=list()
-	strings=list()
+	vars=list()
 
 	for (i in 1:length(blockList)) {
 		vm=createVarHandler(vars, strings, symbols)
@@ -257,6 +261,8 @@ inferFunctionType = function(context, funcSignature=NULL, forcedReturnType=NULL)
 		vars=environment(vm$SETVAR.OP)$vars
 		symbols=environment(vm$GETFUN.OP)$symbols
 		strings=environment(vm$SETVAR.OP)$strings
+
+		blockList[[i]]$opTable=inferTemporaries(blockList[[i]]$opTable)
 	}
 
 	#browser()
@@ -265,10 +271,10 @@ inferFunctionType = function(context, funcSignature=NULL, forcedReturnType=NULL)
 	res$args=args
 	res$llvmSignature=llvmSignature
 	res$returnType=getType(name=tpAny)
-	res$vars=vars
+	res$localVars=vars
 	res$symbols=symbols
 	res$strings=strings
-	#res$blockList=blockList
+	res$blockList=blockList
 	return(res)
 }
 
@@ -334,7 +340,7 @@ compile2llvm = function(context, llvmContext) {
 	funs=context$funs
 
 
-	globalVarList=createVarList(r_helper,context$vars, context$symbols, context$strings, rType2Llvm(getType(name=tpAny)))
+	globalVarList=createVarList(r_helper, context$symbols, context$strings, rType2Llvm(getType(name=tpAny)))
 
 	debugSignature=list()
 
@@ -375,8 +381,8 @@ compile2llvm = function(context, llvmContext) {
 		ir = IRBuilder(block$block)
 
 		if (i==1) {
-			cirHandlerStuff=initCIRHandler(r_helper, globalVarList, params, debugBuilder, debugFun, debugCompUnit, ir, 
-				attr(body(func)[[2]],"srcref")[1], rType2LlvmDebug, nativeModule=context$nativeModule)
+			cirHandlerStuff=initCIRHandler(r_helper, globalVarList, c(params, context$localVars), debugBuilder, debugFun, debugCompUnit, ir, 
+				attr(body(func)[[2]],"srcref")[1], rType2LlvmDebug, rType2Llvm(getType(name=tpAny)), nativeModule=context$nativeModule)
 		}
 
 

@@ -147,10 +147,13 @@ r_module = setRefClass("r_module",
 			return(call)
 		},
 
-		r_call_eval=function(builder,func,...) {
+		r_call_eval=function(builder,func,env=NULL, ...) {
+			if (is.null(env)) {
+				env=createLoad(builder,R_GlobalEnv)
+			}
 			call=r_call(builder,func,...)
 			r_protect(builder,call)
-			res=r_eval(builder,call)
+			res=r_eval(builder,call, env)
 			r_unprotect(builder,1)
 			return(res)
 		},
@@ -169,9 +172,8 @@ r_module = setRefClass("r_module",
 		},
 
 
-		r_eval=function(builder, op) {
-			r_globalenv=createLoad(builder,R_GlobalEnv)
-			createCall(builder,Rf_eval, op, r_globalenv)
+		r_eval=function(builder, op, env) {
+			createCall(builder,Rf_eval, op, env)
 		},
 
 		r_findVar=function(builder, name, env= R_GlobalEnv) {			

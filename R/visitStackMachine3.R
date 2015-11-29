@@ -23,7 +23,7 @@ OpcodeList = list(
 	),
 	list(
 		opcodes=c(
-			"SETVAR.OP"),
+			"SETVAR.OP", "ENDASSIGN.OP"),
 		args=promiseList(
 			val				= vmStack(0),
 			varName			= constantArgString(1)
@@ -31,7 +31,7 @@ OpcodeList = list(
 	),
 	list(
 		opcodes=c(
-			"GETVAR.OP"),
+			"GETVAR.OP", "STARTASSIGN.OP"),
 		args=promiseList(
 			varName			= constantArgString(1)
 		)
@@ -145,6 +145,16 @@ OpcodeList = list(
 	),
 	list(
 		opcodes=c(
+			"DUP3RD.OP"),
+		args=promiseList(
+			top			= vmStack(0),
+			secondTop	= vmStack(-1),
+			thirdTop	= vmStack(-2)
+		),
+		stackPos=stackPos.DUP
+	),
+	list(
+		opcodes=c(
 			"SWAP.OP"),
 		args=promiseList(
 		),
@@ -174,6 +184,27 @@ OpcodeList = list(
 		args=promiseList(
 			variable	= vmStack(-1),
 			offset		= vmStack(0)
+		)
+	),
+	list(
+		opcodes=c(
+			"STARTSUBASSIGN.OP", "STARTSUBASSIGN2.OP", "STARTSUBASSIGN2_N.OP"),
+		args=promiseList(
+			expression	= constantArgCode(1),
+			unknown		= arg(1),
+			val			= vmStack(0)
+			
+		),
+		stackPos=stackPos.NONE
+	),
+	list(
+		opcodes=c(
+			"DFLTSUBASSIGN.OP", "DFLTSUBASSIGN2.OP", "VECSUBASSIGN2.OP"),
+		args=promiseList(
+			expression	= constantArgCode(1),
+			val			= vmStack(-2),
+			var			= vmStack(-1),
+			entry		= vmStack(0)
 		)
 	),
 	list(
@@ -581,6 +612,7 @@ isStackArg=function(funcName) {
 #	resStackPos = at which position of the stack will the result of this call be saved
 #	assignsStack = will the result of this call be saved on the stack
 #	argTypes = a list of the the type of each argument to this function
+#	argCount = how many arguments are avaiable
 #	and in addition all arguments of this OP
 
 

@@ -6,5 +6,5 @@ Description: Building upon the compiler package and Rllvm, this package compiles
 Depends: R (>= 3.1.1), Rllvm, compiler, bit64
 License: What license is it under?
 LazyData: true
-Collate: typelib.R compile.R inferType.R llvm_helper.R llvm_native_helper.R visitStackMachine3.R createIR2.R discoverBlocks.R lowerOps.R
+Collate: typelib.R compile.R inferType.R llvm_helper.R llvm_native_helper.R visitStackMachine3.R createIR2.R discoverBlocks.R lowerOps.R inferTemporaries.R
 
