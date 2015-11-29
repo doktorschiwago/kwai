@@ -15,7 +15,21 @@ source("test14b.R", keep.source=TRUE)
 
 #debug(inferType2)
 llvmFunc=byte2llvm(pisum)
+pisum_cmp=cmpfun(pisum)
 print(pisum)
 print(pisum())
+print(pisum_cmp())
 print(llvmFunc())
+
+
+library(microbenchmark)
+
+tm=microbenchmark(
+  pisum(),
+	pisum_cmp(),
+  llvmFunc(),
+	times=20
+)
+
+tm
 

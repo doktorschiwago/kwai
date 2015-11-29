@@ -14,12 +14,16 @@ source("../R/lowerOps.R")
 source("test14b.R", keep.source=TRUE)
 
 #debug(inferType2)
-llvmFunc=byte2llvm(pisum)
+llvmFunc=byte2llvm(pisum, useNative=TRUE)
+
+
 print(pisum)
 print(pisum())
 
-
+#readLines(file("stdin"), n=1)
 print(llvmFunc())
+
+
 
 llvmFunc2=function() {
 	while (TRUE) {

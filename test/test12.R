@@ -1,8 +1,13 @@
 myfunction <- function(arg1,arg2){
-	qq=1	
-	for (i in 1:arg1) {
-		qq=qq+arg2+i
-	}
+	qq=1
+	#for (i in 1:arg1) {
+		#print(i)
+		#print(qq)
+		print(arg2)
+		qq=qq-arg2
+		print(arg2)
+		#print(qq)
+	#}
 	return(qq)
 }
 
@@ -39,6 +44,7 @@ source("../R/discoverBlocks.R")
 #debug(inferType2)
 llvmFunc=byte2llvm(myfunction)
 print(myfunction)
-print(myfunction(2,11))
-print(llvmFunc(2,11))
+print(myfunction(2,0))
+print("-----")
+print(llvmFunc(2,0))
 
