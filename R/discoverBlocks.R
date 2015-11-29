@@ -199,6 +199,10 @@ discoverBlocks2 <-function(opTable) {
 
 	for ( i in 1:length) {
 		blockList2[[i]]$opTable=opTable[blockList2[[i]]$start:blockList2[[i]]$end]
+
+		for (j in 1:length(blockList2[[i]]$opTable)) {
+			blockList2[[i]]$opTable[[j]]$opNumber=j
+		}
 	}
 
 	return(blockList2)
